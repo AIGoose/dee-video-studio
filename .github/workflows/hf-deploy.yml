@@ -21,3 +21,14 @@ jobs:
           git config user.name "Dee Ferdinand"
           git remote add hf https://AIgoose:${HF_TOKEN}@huggingface.co/spaces/AIgoose/hyperframes-video-studio || true
           git push hf main --force
+
+      - name: Set HF_TOKEN as Space secret
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          curl -s -X POST \
+            "https://huggingface.co/api/spaces/AIgoose/hyperframes-video-studio/secrets" \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"key":"HF_TOKEN","value":"'"${HF_TOKEN}"'"}'
+          echo "Space secret HF_TOKEN set."
