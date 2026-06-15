@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dee Video Studio</title>
+<style>
+:root{--bg:#0f0f0f;--s:#1a1a1a;--s2:#242424;--b:rgba(255,255,255,0.1);--a:#7C6FE0;--a2:#E06F9A;--t:#e8e6e1;--m:#888;--g:#4ade80;--r:#f87171;--rad:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+header{padding:20px 28px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:12px}
+header h1{font-size:18px;font-weight:700}header span{font-size:12px;color:var(--m)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.layout{display:grid;grid-template-columns:360px 1fr;min-height:calc(100vh - 61px)}
+.sidebar{border-right:1px solid var(--b);padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.main{padding:20px;overflow-y:auto}
+.card{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);padding:14px}
+.card-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--m);margin-bottom:10px}
+.wf-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.wf-pill{padding:10px;border-radius:8px;border:1px solid var(--b);cursor:pointer;background:var(--s2);text-align:left;transition:all .15s;width:100%}
+.wf-pill:hover{border-color:var(--a)}.wf-pill.active{border-color:var(--a);background:rgba(124,111,224,.15)}
+.wf-pill .icon{font-size:18px;display:block;margin-bottom:3px}
+.wf-pill .name{font-size:12px;font-weight:600;color:var(--t)}
+.wf-pill .desc{font-size:10px;color:var(--m);margin-top:2px;line-height:1.35}
+.drop-zone{border:2px dashed var(--b);border-radius:var(--rad);padding:24px 12px;text-align:center;cursor:pointer;transition:all .2s}
+.drop-zone.drag{border-color:var(--a);background:rgba(124,111,224,.08)}
+.drop-zone input{display:none}
+.drop-zone .dz-icon{font-size:28px;margin-bottom:6px}
+.drop-zone p{font-size:12px;color:var(--m)}
+.drop-zone strong{color:var(--t)}
+.file-list{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.file-item{display:flex;align-items:center;gap:7px;padding:7px 9px;background:var(--s2);border-radius:7px;font-size:11px}
+.fi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi-size{color:var(--m);flex-shrink:0}
+.fi-rm{background:none;border:none;color:var(--m);cursor:pointer;font-size:13px;padding:0 3px}
+.fi-rm:hover{color:var(--r)}
+.field{margin-bottom:11px}
+.field label{display:block;font-size:11px;color:var(--m);margin-bottom:4px}
+.field input,.field select{width:100%;padding:7px 9px;background:var(--s2);border:1px solid var(--b);border-radius:7px;color:var(--t);font-size:12px;outline:none}
+.field input:focus,.field select:focus{border-color:var(--a)}
+.field select option{background:var(--s2)}
+.music-grid{display:flex;flex-direction:column;gap:5px}
+.music-item{display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--s2);border-radius:7px;border:1px solid var(--b);cursor:pointer;transition:border-color .15s}
+.music-item:hover,.music-item.sel{border-color:var(--a)}
+.music-item input{accent-color:var(--a)}
+.mi-info{flex:1}.mi-name{font-size:12px;font-weight:500}.mi-tags{font-size:10px;color:var(--m);margin-top:1px}
+.mi-bpm{font-size:10px;color:var(--m);flex-shrink:0}
+.render-btn{width:100%;padding:13px;background:var(--a);color:#fff;border:none;border-radius:var(--rad);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.render-btn:hover:not(:disabled){background:#6b5fd4}
+.render-btn:disabled{opacity:.5;cursor:not-allowed}
+.job-item{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);padding:14px;margin-bottom:10px}
+.job-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.job-name{font-size:13px;font-weight:600}.job-meta{font-size:10px;color:var(--m);margin-top:2px}
+.sbadge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:99px;flex-shrink:0}
+.sq{background:rgba(251,191,36,.15);color:#fbbf24}
+.sc{background:rgba(124,111,224,.2);color:#a78bfa}
+.sr{background:rgba(56,189,248,.15);color:#38bdf8}
+.sd{background:rgba(74,222,128,.15);color:var(--g)}
+.se{background:rgba(248,113,113,.15);color:var(--r)}
+.prog-bar{height:4px;background:var(--s2);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--a),var(--a2));border-radius:99px;transition:width .3s}
+.job-actions{display:flex;gap:7px}
+.btn-sm{padding:5px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-dl{background:var(--g);color:#000}.btn-dl:hover{background:#22c55e}
+.btn-rt{background:var(--s2);color:var(--t);border:1px solid var(--b)}
+.section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.section-hdr h2{font-size:15px;font-weight:700}
+.section-hdr span{font-size:11px;color:var(--m)}
+.empty{text-align:center;padding:50px 20px;color:var(--m)}
+.empty .ei{font-size:44px;margin-bottom:10px}
+.empty p{font-size:13px}
+input[type=range]{accent-color:var(--a);cursor:pointer;width:100%}
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;background:var(--s);border:1px solid var(--b);border-radius:var(--rad);font-size:12px;z-index:999;animation:tin .2s ease}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="dot"></div>
+  <h1>🎬 Dee Video Studio</h1>
+  <span>HyperFrames · Cloud Render · AI-powered</span>
+</header>
+<div class="layout">
+<div class="sidebar">
+  <div class="card">
+    <div class="card-title">Video Type</div>
+    <div class="wf-grid" id="wf-grid"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Upload Assets</div>
+    <div class="drop-zone" id="dz">
+      <input type="file" id="fi" multiple accept="video/*,image/*,audio/*">
+      <div class="dz-icon">📁</div>
+      <p><strong>Click or drag files here</strong></p>
+      <p>Videos · Photos · Audio — up to 500MB total</p>
+    </div>
+    <div class="file-list" id="fl"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Project Details</div>
+    <div class="field"><label>Client / Event Name</label><input id="clientName" placeholder="e.g. Purbasari Indonesia"></div>
+    <div class="field"><label>Trainer Name</label><input id="trainerName" value="Dee Ferdinand"></div>
+    <div class="field"><label>Tagline</label><input id="tagline" value="AI Corporate Trainer"></div>
+    <div class="field"><label>Website</label><input id="website" value="deeferdinand.com"></div>
+    <div class="field"><label>Format</label>
+      <select id="format">
+        <option value="9:16">9:16 Vertical (Reels / TikTok / Shorts)</option>
+        <option value="16:9">16:9 Landscape (YouTube / LinkedIn)</option>
+        <option value="1:1">1:1 Square (Instagram Feed)</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Background Music</div>
+    <div class="music-grid" id="mg">
+      <label class="music-item sel"><input type="radio" name="music" value="auto" checked>
+        <div class="mi-info"><div class="mi-name">🤖 Auto-select</div><div class="mi-tags">Matches your workflow</div></div>
+      </label>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>Volume: <span id="vl">30%</span></label>
+      <input type="range" id="mvol" min="0" max="100" value="30" oninput="document.getElementById('vl').textContent=this.value+'%'">
+    </div>
+  </div>
+  <button class="render-btn" id="rb" onclick="startRender()">▶ Render Video</button>
+</div>
+<div class="main">
+  <div class="section-hdr">
+    <h2>Render Queue</h2>
+    <span id="jc">0 jobs</span>
+  </div>
+  <div id="jlist">
+    <div class="empty"><div class="ei">🎬</div><p>Upload assets and hit Render to create your first video.</p></div>
+  </div>
+</div>
+</div>
+<script>
+const API='';
+let wf='testimonial', files=[], jobs={};
+
+async function init(){
+  try{
+    const [wfs,tracks]=await Promise.all([fetch(API+'/api/workflows').then(r=>r.json()),fetch(API+'/api/music').then(r=>r.json())]);
+    document.getElementById('wf-grid').innerHTML=wfs.map(w=>`<button class="wf-pill ${w.id===wf?'active':''}" onclick="selWf('${w.id}')"><span class="icon">${w.icon}</span><span class="name">${w.name}</span><span class="desc">${w.description}</span></button>`).join('');
+    const mg=document.getElementById('mg');
+    mg.innerHTML=`<label class="music-item sel"><input type="radio" name="music" value="auto" checked><div class="mi-info"><div class="mi-name">🤖 Auto-select</div><div class="mi-tags">Matches your workflow</div></div></label>`
+      +tracks.map(t=>`<label class="music-item"><input type="radio" name="music" value="${t.file}"><div class="mi-info"><div class="mi-name">${moji(t.mood)} ${cap(t.mood)}</div><div class="mi-tags">${(t.tags||[]).slice(0,3).join(' · ')}</div></div><div class="mi-bpm">${t.bpm} bpm</div></label>`).join('');
+    mg.querySelectorAll('.music-item').forEach(el=>el.addEventListener('click',()=>{mg.querySelectorAll('.music-item').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}));
+  }catch(e){console.warn('Init error',e)}
+}
+
+function moji(m){return{corporate:'🏢',cinematic:'🎬',upbeat:'⚡',warm:'🤝',tech:'🤖',energetic:'🔥'}[m]||'🎵'}
+function cap(s){return s?s[0].toUpperCase()+s.slice(1):''}
+function selWf(id){wf=id;document.querySelectorAll('.wf-pill').forEach(el=>el.classList.toggle('active',el.getAttribute('onclick')===`selWf('${id}')`))}
+
+const dz=document.getElementById('dz');
+const fi=document.getElementById('fi');
+dz.addEventListener('click',()=>fi.click());
+fi.addEventListener('change',e=>addFiles([...e.target.files]));
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');addFiles([...e.dataTransfer.files])});
+
+function addFiles(f){files.push(...f);renderFL()}
+function removeFile(i){files.splice(i,1);renderFL()}
+function renderFL(){
+  const l=document.getElementById('fl');
+  l.innerHTML=files.map((f,i)=>`<div class="file-item"><span>${ficon(f.type)}</span><span class="fi-name">${f.name}</span><span class="fi-size">${fsz(f.size)}</span><button class="fi-rm" onclick="removeFile(${i})">✕</button></div>`).join('');
+}
+function ficon(m){if(m.startsWith('video/'))return'🎥';if(m.startsWith('image/'))return'🖼️';if(m.startsWith('audio/'))return'🎵';return'📄'}
+function fsz(b){return b>1024*1024?(b/1024/1024).toFixed(1)+'MB':(b/1024).toFixed(0)+'KB'}
+
+async function startRender(){
+  if(!files.length){toast('Please upload at least one video or photo.');return}
+  const rb=document.getElementById('rb');rb.disabled=true;
+  const fd=new FormData();
+  files.forEach(f=>fd.append('files',f));
+  fd.append('workflow',wf);
+  ['clientName','trainerName','tagline','website','format'].forEach(id=>fd.append(id,document.getElementById(id).value));
+  fd.append('musicTrack',document.querySelector('input[name=music]:checked')?.value||'auto');
+  fd.append('musicVolume',(document.getElementById('mvol').value/100).toString());
+  try{
+    const res=await fetch(API+'/api/render',{method:'POST',body:fd});
+    const {jobId}=await res.json();
+    jobs[jobId]={id:jobId,status:'queued',progress:0,projectName:document.getElementById('clientName').value||'Untitled',workflow:wf,createdAt:Date.now()};
+    renderJobs();connectWS(jobId);toast('✅ Render started!');
+  }catch(e){toast('❌ '+e.message)}
+  finally{rb.disabled=false}
+}
+
+function connectWS(jobId){
+  const p=location.protocol==='https:'?'wss':'ws';
+  const s=new WebSocket(`${p}://${location.host}?job=${jobId}`);
+  s.onmessage=e=>{Object.assign(jobs[jobId]||{},JSON.parse(e.data));if(!jobs[jobId])jobs[jobId]=JSON.parse(e.data);renderJobs();const d=JSON.parse(e.data);if(d.status==='done'||d.status==='error')s.close()};
+}
+
+function renderJobs(){
+  const c=document.getElementById('jlist');
+  const list=Object.values(jobs).sort((a,b)=>b.createdAt-a.createdAt);
+  document.getElementById('jc').textContent=`${list.length} job${list.length!==1?'s':''}`;
+  if(!list.length){c.innerHTML='<div class="empty"><div class="ei">🎬</div><p>Upload assets and hit Render to create your first video.</p></div>';return}
+  const cls={queued:'sq',composing:'sc',rendering:'sr',done:'sd',error:'se'};
+  c.innerHTML=list.map(j=>`<div class="job-item">
+    <div class="job-header"><div><div class="job-name">${j.projectName||'Untitled'} · ${j.workflow||''}</div><div class="job-meta">${new Date(j.createdAt).toLocaleTimeString()} · ${(j.id||'').slice(0,8)}…</div></div>
+    <span class="sbadge ${cls[j.status]||'sq'}">${j.status}</span></div>
+    <div class="prog-bar"><div class="prog-fill" style="width:${j.progress||0}%"></div></div>
+    <div class="job-actions">
+      ${j.status==='done'?`<button class="btn-sm btn-dl" onclick="dl('${j.id}')">⬇ Download MP4</button>`:''}
+      ${j.status==='error'?`<span style="font-size:11px;color:var(--r)">${j.error}</span>`:''}
+    </div></div>`).join('');
+}
+
+function dl(id){window.open(API+'/api/download/'+id,'_blank')}
+function toast(msg){const el=document.createElement('div');el.className='toast';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),3000)}
+
+init();
+</script>
+</body>
+</html>
