@@ -1,0 +1,23 @@
+name: Deploy to HuggingFace Space
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.email "dee.ferdinand@gmail.com"
+          git config user.name "Dee Ferdinand"
+          git remote add hf https://AIgoose:${HF_TOKEN}@huggingface.co/spaces/AIgoose/dee-video-studio || true
+          git push hf main --force
