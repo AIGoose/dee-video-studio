@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { renderVideo } from './lib/renderer.js';
 import { buildComposition } from './lib/composer.js';
 import { getMusicTrack } from './lib/music.js';
+import { uploadToHuggingFace } from './lib/uploader.js';
 import { WORKFLOWS } from './workflows/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,7 +41,12 @@ function push(jobId, data) {
   if (job) Object.assign(job, data);
 }
 
-app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/api/health', (_, res) => res.json({
+  status: 'ok',
+  time: new Date().toISOString(),
+  hf_renders_repo: process.env.HF_RENDERS_REPO || 'AIgoose/video-renders',
+  hf_token_set: !!process.env.HF_TOKEN,
+}));
 
 app.get('/api/workflows', (_, res) => res.json(
   Object.entries(WORKFLOWS).map(([id, w]) => ({ id, ...w.meta }))
@@ -102,18 +108,22 @@ app.post('/api/render', async (req, res) => {
   setImmediate(() => runJob(jobId, projectDir, config));
 });
 
+// Legacy local download (fallback if HF upload fails)
 app.get('/api/download/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job?.outputPath || !fs.existsSync(job.outputPath))
-    return res.status(404).json({ error: 'Not ready' });
+    return res.status(404).json({ error: 'Not ready or already uploaded to HF' });
   res.download(job.outputPath);
 });
 
 async function runJob(jobId, projectDir, config) {
   try {
     push(jobId, { status: 'composing', progress: 5 });
-    const musicPath = await getMusicTrack(config.musicTrack, config.workflow, config.duration,
-      (d) => push(jobId, d));
+
+    const musicPath = await getMusicTrack(
+      config.musicTrack, config.workflow, config.duration,
+      (d) => push(jobId, d)
+    );
     push(jobId, { progress: 15 });
 
     const compDir = path.join(__dirname, 'compositions', 'projects', jobId);
@@ -123,17 +133,44 @@ async function runJob(jobId, projectDir, config) {
     if (!workflow) throw new Error(`Unknown workflow: ${config.workflow}`);
 
     await buildComposition(compDir, projectDir, musicPath, config, workflow,
-      (p) => push(jobId, { status: 'composing', progress: 15 + Math.round(p * 0.4) }));
-    push(jobId, { status: 'rendering', progress: 55 });
+      (p) => push(jobId, { status: 'composing', progress: 15 + Math.round(p * 0.35) }));
+
+    push(jobId, { status: 'rendering', progress: 50 });
 
     const outDir = path.join(__dirname, 'renders');
     fs.mkdirSync(outDir, { recursive: true });
     const outputFile = path.join(outDir, `${jobId}.mp4`);
 
     await renderVideo(compDir, outputFile, config,
-      (p) => push(jobId, { status: 'rendering', progress: 55 + Math.round(p * 0.4) }));
+      (p) => push(jobId, { status: 'rendering', progress: 50 + Math.round(p * 0.35) }));
 
-    push(jobId, { status: 'done', progress: 100, outputPath: outputFile, outputUrl: `/renders/${jobId}.mp4` });
+    push(jobId, { status: 'uploading', progress: 88 });
+
+    // Build a human-readable filename
+    const slug = (config.clientName || config.projectName || 'video')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+    const ts = new Date().toISOString().slice(0, 10);
+    const hfFilename = `${slug}-${config.workflow}-${ts}-${jobId.slice(0, 8)}.mp4`;
+
+    let hfResult = null;
+    try {
+      hfResult = await uploadToHuggingFace(outputFile, hfFilename);
+      // Clean up local render to save Space disk
+      fs.unlinkSync(outputFile);
+    } catch (uploadErr) {
+      console.warn('[upload warning] HF upload failed, keeping local file:', uploadErr.message);
+    }
+
+    push(jobId, {
+      status: 'done',
+      progress: 100,
+      outputPath: hfResult ? null : outputFile,
+      hf_url: hfResult?.hf_url || null,
+      viewer_url: hfResult?.viewer_url || null,
+      hf_filename: hfResult?.filename || null,
+      repo_id: hfResult?.repo_id || null,
+      outputUrl: hfResult ? hfResult.hf_url : `/renders/${jobId}.mp4`,
+    });
   } catch (err) {
     console.error('[job error]', jobId, err);
     push(jobId, { status: 'error', error: err.message });
@@ -141,4 +178,4 @@ async function runJob(jobId, projectDir, config) {
 }
 
 const PORT = process.env.PORT || 7860;
-server.listen(PORT, () => console.log(`✅ Dee Video Studio on port ${PORT}`));
+server.listen(PORT, () => console.log(`\u2705 Dee Video Studio on port ${PORT}`));
