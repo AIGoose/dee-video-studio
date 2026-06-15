@@ -19,5 +19,5 @@ jobs:
         run: |
           git config user.email "dee.ferdinand@gmail.com"
           git config user.name "Dee Ferdinand"
-          git remote add hf https://AIgoose:${HF_TOKEN}@huggingface.co/spaces/AIgoose/dee-video-studio || true
+          git remote add hf https://AIgoose:${HF_TOKEN}@huggingface.co/spaces/AIgoose/hyperframes-video-studio || true
           git push hf main --force
