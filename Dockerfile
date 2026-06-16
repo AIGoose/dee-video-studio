@@ -23,6 +23,10 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install
 
+# Install chrome-headless-shell for HyperFrames optimized render path
+RUN npx @puppeteer/browsers install chrome-headless-shell@stable --path /app/.chrome || true
+ENV PRODUCER_HEADLESS_SHELL_PATH=/app/.chrome/chrome-headless-shell/linux-*/chrome-headless-shell/chrome-headless-shell
+
 RUN python3 -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 COPY requirements.txt ./
