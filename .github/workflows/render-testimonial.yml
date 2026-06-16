@@ -1,0 +1,127 @@
+name: Render Testimonial Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      gdrive_file_id:
+        description: 'Google Drive file ID of testimonial MOV'
+        required: true
+        default: '1f1qlgyLJSCQgpjrWflaqldsNE2fZ-_1X'
+      participant_name:
+        description: 'Participant name (lower-third)'
+        required: false
+        default: 'Peserta Training'
+      participant_role:
+        description: 'Participant role / org'
+        required: false
+        default: 'AI Transformation Series - Batch 2026'
+      pull_quote:
+        description: 'Pull quote text (Indonesian)'
+        required: false
+        default: 'Setelah training ini, tim kami langsung bisa praktek dan hasilnya nyata.'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg python3-pip
+          pip3 install gdown huggingface_hub --quiet
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install HyperFrames CLI
+        run: npm install -g hyperframes
+
+      - name: Install Chromium
+        run: sudo apt-get install -y chromium-browser || true
+
+      - name: Download testimonial MOV from Google Drive
+        run: |
+          mkdir -p assets
+          python3 - <<'EOF'
+          import gdown, os, sys
+          fid = "${{ github.event.inputs.gdrive_file_id }}"
+          out = "assets/testimoni_raw.MOV"
+          gdown.download(f"https://drive.google.com/uc?id={fid}", out, quiet=False)
+          if not os.path.exists(out):
+              sys.exit(1)
+          print(f"Downloaded {os.path.getsize(out)/1024/1024:.1f} MB")
+          EOF
+
+      - name: Convert MOV to MP4
+        run: |
+          ffmpeg -y -i assets/testimoni_raw.MOV \
+            -c:v libx264 -preset fast -crf 22 \
+            -c:a aac -b:a 192k -movflags +faststart \
+            assets/testimoni.mp4
+          echo "Size: $(du -sh assets/testimoni.mp4)"
+
+      - name: Get video duration
+        run: |
+          DUR=$(ffprobe -v quiet -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 assets/testimoni.mp4 | cut -d. -f1)
+          echo "VIDEO_DURATION=$DUR" >> $GITHUB_ENV
+          echo "Duration: ${DUR}s"
+
+      - name: Patch composition with participant data
+        run: |
+          python3 scripts/patch_composition.py \
+            --input compositions/testimonial.html \
+            --output compositions/testimonial_render.html \
+            --name "${{ github.event.inputs.participant_name }}" \
+            --role "${{ github.event.inputs.participant_role }}" \
+            --quote "${{ github.event.inputs.pull_quote }}"
+          sed -i "s/data-duration=\"90\"/data-duration=\"${VIDEO_DURATION}\"/" \
+            compositions/testimonial_render.html
+
+      - name: Lint composition
+        run: npx hyperframes lint compositions/testimonial_render.html || true
+
+      - name: Render to MP4
+        run: |
+          mkdir -p output
+          TS=$(date +%Y%m%d-%H%M)
+          OUT="output/dee-testimonial-${TS}.mp4"
+          echo "OUTPUT_FILE=$OUT" >> $GITHUB_ENV
+          npx hyperframes render compositions/testimonial_render.html \
+            --output "$OUT" --width 1080 --height 1920 --fps 30
+          echo "Rendered: $OUT ($(du -sh $OUT | cut -f1))"
+
+      - name: Upload to Hugging Face dataset
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          out = os.environ["OUTPUT_FILE"]
+          fname = os.path.basename(out)
+          api.upload_file(
+              path_or_fileobj=out,
+              path_in_repo=f"renders/{fname}",
+              repo_id="AIgoose/video-renders",
+              repo_type="dataset",
+          )
+          url = f"https://huggingface.co/datasets/AIgoose/video-renders/resolve/main/renders/{fname}"
+          print(f"Video ready: {url}")
+          print(f"::notice title=Video Ready::{url}")
+          EOF
+
+      - name: Upload artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: testimonial-mp4
+          path: output/*.mp4
+          retention-days: 7
