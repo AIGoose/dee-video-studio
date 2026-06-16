@@ -92,3 +92,5 @@ WebSocket: `wss://aigoose-hyperframes-video-studio.hf.space?job=JOB_ID`
 ---
 
 Built by Dee Ferdinand × Claude (Anthropic). HyperFrames by HeyGen — Apache 2.0.
+
+<!-- rebuild-trigger: 1781584816 -->
