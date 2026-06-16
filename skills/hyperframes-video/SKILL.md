@@ -1,173 +1,187 @@
 ---
 name: hyperframes-video
-description: "Build production-ready HyperFrames HTML video compositions for testimonials, teasers, trailers, and community stories. Use when the user mentions 'hyperframes video,' 'testimonial video,' 'HyperFrames composition,' 'render MP4 from HTML,' 'kinetic caption video,' 'Dee Ferdinand video,' 'corporate training video,' 'event teaser video,' 'video with GSAP,' or wants to build any HTML-to-MP4 video. Also trigger when the user says 'build me a video for [client],' 'make a 30 second testimonial,' 'create a social proof video,' or references any event folder in Google Drive or GitHub. IMPORTANT: Do NOT ask clarifying questions before acting — scan available assets, transcribe, analyze, present a brief, then build immediately on confirmation."
+description: "Build production-ready HyperFrames HTML video compositions for testimonials, teasers, trailers, and community stories. Use when the user mentions 'hyperframes video,' 'testimonial video,' 'HyperFrames composition,' 'render MP4 from HTML,' 'kinetic caption video,' 'Dee Ferdinand video,' 'corporate training video,' 'event teaser video,' or wants to build any HTML-to-MP4 video from Google Drive footage. Also trigger when the user says 'build me a video for [client],' 'make a 30 second testimonial,' or 'create a social proof video.' IMPORTANT: Do NOT ask clarifying questions before acting. Scan Google Drive -> run watch_gdrive.py to WATCH and transcribe each video -> analyze -> present brief -> build on confirmation."
 metadata:
-  version: 2.0.0
-  author: Dee Ferdinand × Claude
+  version: 3.0.0
+  author: Dee Ferdinand x Claude
+  sources:
+    - bradautomates/claude-video (MIT)
+    - nateherkai/hyperframes-student-kit
+    - heygen-com/hyperframes-launch-video
+    - coleam00/hyperframes-ai-video-generation
+    - elevenlabs/skills
 ---
 
-# HyperFrames Video Production Skill v2
+# HyperFrames Video Production Skill v3
 
-**ACT-FIRST RULE: Never ask questions before scanning. Always scan → transcribe → analyze → brief → confirm → build.**
+**ACT-FIRST: Scan Drive -> Watch videos -> Transcribe -> Analyze -> Brief -> Build**
 
-This skill produces correct HyperFrames HTML compositions with:
-- Auto transcription + intelligent quote extraction
-- 3 brand-matched visual styles
-- ElevenLabs lo-fi music generation
-- Direct GitHub push + HuggingFace render
-- Zero black frames, correct audio
-
----
-
-## PIPELINE (6 phases — execute in order, no skipping)
-
-### PHASE 1 — Asset Ingestion
-
-**Auto-detect from 3 sources (in priority order):**
-
-**Source A — Google Drive (via Composio)**
-```
-Account: tomoxi (tomoxi.marketing@gmail.com)
-Tool: GOOGLEDRIVE_FIND_FILE
-Path: 2026/[EventFolder]/
-Subfolders: Video/ → .MOV files (testimonial clips)
-            Foto/  → .JPG files (B-roll photos)
-            Testimoni/ → .MOV files (raw testimonial recordings)
-```
-→ Download all .MOV + .JPG files, save to `/tmp/[client-slug]/`
-
-**Source B — GitHub (via Composio)**
-```
-Tool: GITHUB_GET_REPOSITORY_CONTENT
-Repo: AIGoose/dee-video-studio
-Path: projects/[client-slug]/assets/
-```
-
-**Source C — Direct upload (user uploads in chat)**
-→ Files already in context, save to `/tmp/[client-slug]/`
-
-→ Always report: `"Found X videos, Y photos from [source]"` then proceed immediately.
+v3 core upgrade: Claude can now WATCH every Google Drive video using `scripts/watch_gdrive.py`
+Based on bradautomates/claude-video (MIT) -- extracts frames + transcribes + finds best quote.
 
 ---
 
-### PHASE 2 — Transcription + Cleaning
+## PIPELINE
 
-For every .MOV in the Testimoni/ folder:
+### PHASE 1 -- Scan Google Drive
 
-**Transcribe via Whisper (HF Inference)** — see `references/transcription.md` for full code
+```
+Tool: GOOGLEDRIVE_FIND_FILE (Composio, account: tomoxi)
+Scan: 2026/[EventFolder]/Testimoni/ -> .MOV files
+Also: Video/ and Foto/ subfolders
+Report: "Found X video(s), Y photo(s)" then proceed immediately.
+```
 
-**Clean:** Remove fillers ("eh", "umm", "itu", "ya", "kan", "gitu"), repetitions, false starts
+### PHASE 2 -- Download Videos
 
-**Analyze for best moments:**
-1. Find the single best 10–15s quote (most emotional/concrete/surprising)
-2. Identify the strongest outcome statement ("sekarang saya bisa...")
-3. Rate overall energy: low/medium/high → maps to style suggestion
-4. Suggest duration: <2min raw → 15s. 2–5min → 30s. 5min+ → 45–60s
+For each .MOV, download to /tmp/[client-slug]/:
+
+```bash
+# Option A: Composio (private files)
+# Tool: GOOGLEDRIVE_DOWNLOAD_FILE account=tomoxi file_id=[id]
+
+# Option B: Direct (shared files)
+python3 -c "import requests; r=requests.get('https://drive.google.com/uc?export=download&id=FILE_ID&confirm=t',stream=True); open('/tmp/video.MOV','wb').write(r.content)"
+```
+
+### PHASE 3 -- Watch + Transcribe Each Video
+
+```bash
+# Install deps (once)
+pip install gdown --break-system-packages
+# Set at least one key:
+export GROQ_API_KEY=...    # preferred (groq.com free tier)
+export OPENAI_API_KEY=...  # fallback
+# HF_TOKEN used automatically as final fallback
+
+# Run for each video
+python3 ${SKILL_DIR}/scripts/watch_gdrive.py \\
+  --local /tmp/purbasari/testimoni_1.MOV --resolution 512
+
+# Focus on a specific moment
+python3 ${SKILL_DIR}/scripts/watch_gdrive.py \\
+  --local /tmp/purbasari/testimoni_1.MOV --start 0:23 --end 0:45
+```
+
+Script outputs:
+- Frame paths -> READ each with the Read tool to see the video visually
+- Timestamped transcript (cleaned)
+- Best testimonial quote with exact timestamp
+
+Sample output:
+```
+# watch_gdrive: video report
+- Duration: 00:47 (47.2s)
+- Frames: 28 @ 0.593 fps
+- Transcript: 18 segments (cleaned)
+
+## Frames
+- `/tmp/watch-gdrive-xxx/frames/frame_000001.jpg` (t=00:01)
+...
+
+## Transcript
+[00:01] Pertama kali dengar AI, saya pikir ini susah
+[00:05] Tapi setelah training, ternyata langsung bisa dipakai
+...
+
+## Best Testimonial Quote
+Type: outcome
+Timestamp: 00:05 -> 00:17 (12s)
+Quote: "Setelah training, ternyata langsung bisa dipakai. Sekarang bisa buat konten sendiri"
+```
+
+### PHASE 4 -- Analyze + Present Brief (ONE confirmation)
+
+```
+BRIEF -- [Client Name]
+VIDEOS WATCHED: testimoni_1.MOV (47s, 18 segments)
+BEST QUOTE: "[exact quote]" (0:05-0:17, type: outcome)
+VISUAL: [describe what frames showed at that moment]
+PHOTOS: 28 available for B-roll
+RECOMMENDATION: Testimonial 30s | Dark Premium | ElevenLabs lo-fi 88bpm
+Say "go" to build.
+```
+
+### PHASE 5 -- Style
+
+Read references/styles.md. Auto-assign:
+- Corporate + high energy -> Dark Premium (Space Grotesk 160px, #0d0d1f)
+- Community/GKI/church -> Warm Documentary (Plus Jakarta 80px, warm brown)
+- Teaser/public event -> Bold Editorial (Space Grotesk 128px, white bg)
+
+### PHASE 6 -- Build Composition
+
+Read references/composition.md. Use exact timestamp from watch_gdrive report:
+
+```html
+<video data-start="7.65" data-duration="8.85" data-track-index="10"
+       data-volume="0.88" src="./assets/testimoni_1.MOV" playsinline
+       style="width:100%;height:100%;object-fit:cover;"></video>
+```
+
+### PHASE 7 -- Push GitHub + Render HF
+
+Push index.html + meta.json via Composio GITHUB_COMMIT_MULTIPLE_FILES.
+POST to https://aigoose-hyperframes-video-studio.hf.space/api/render.
+Poll /api/jobs/[id] until done. Share hf_url.
 
 ---
 
-### PHASE 3 — Intelligent Brief (ONE confirmation point)
+## watch_gdrive.py Architecture
 
-Present this brief — **do not ask multiple questions**:
+Based on bradautomates/claude-video (MIT). Key adaptations:
 
-```
-📋 VIDEO BRIEF — [Client Name]
+| Component     | claude-video original   | watch_gdrive adaptation             |
+|---------------|-------------------------|-------------------------------------|
+| Download      | yt-dlp (public URLs)    | gdown + direct auth (private Drive) |
+| Frames        | auto-scaled fps budget  | same logic (<=30s=30f, <=60s=40f)   |
+| Transcription | Groq -> OpenAI Whisper  | same + HF Inference fallback        |
+| Cleanup       | rolling-duplicate dedup | + Indonesian filler removal         |
+| Analysis      | none                    | + best quote extraction (6 markers) |
 
-SOURCE: [X videos, Y photos from Drive/GitHub/upload]
-
-TRANSCRIPT ANALYSIS:
-Best quote: "[actual quote from transcript]" (at 0:42)
-Strongest moment: [describe]
-Energy level: High → recommended style: Dark Premium
-
-RECOMMENDED BUILD:
-• Type: Corporate Testimonial
-• Duration: 30s
-• Style: Dark Premium (Space Grotesk, kinetic 160px, dark #0d0d1f)
-• Music: ElevenLabs lo-fi upbeat 88 BPM
-• Quote to use: "[best quote]"
-
-Say "go" to build this, or adjust any parameter above.
-```
-
-**If user says "go" or any affirmative → immediately proceed to Phase 4.**
-
----
-
-### PHASE 4 — Style Selection
-
-Read `references/styles.md` for full CSS/GSAP per style.
-
-| Style | When | Caption | Palette |
-|-------|------|---------|--------|
-| **Dark Premium** | Corporate, high energy | 160px Space Grotesk | #0d0d1f + purple |
-| **Warm Documentary** | Community, GKI, intimate | 80px Plus Jakarta | Warm brown + amber |
-| **Bold Editorial** | Teaser, launch, public event | 128px Space Grotesk | White + black |
-
----
-
-### PHASE 5 — Build + Push to GitHub
-
-Read `references/composition.md` — do not build from memory.
-
-**Commit via Composio:**
-```
-Tool: GITHUB_COMMIT_MULTIPLE_FILES
-Repo: AIGoose/dee-video-studio
-Files: projects/[client-slug]/index.html + meta.json
-```
-
----
-
-### PHASE 6 — Render via HuggingFace
-
-```python
-import requests, time
-r = requests.post(
-    "https://aigoose-hyperframes-video-studio.hf.space/api/render",
-    files=[("files", ("testimoni.MOV", open(video_path,"rb"), "video/quicktime")),
-           ("files", ("foto_1.JPG", open(photo_path,"rb"), "image/jpeg"))],
-    data={"workflow":"testimonial","clientName":CLIENT,"trainerName":"Dee Ferdinand",
-          "tagline":"AI Corporate Trainer","website":"deeferdinand.com",
-          "format":"9:16","musicTrack":"auto","duration":"30"}
-)
-job_id = r.json()["jobId"]
-while True:
-    job = requests.get(f"https://aigoose-hyperframes-video-studio.hf.space/api/jobs/{job_id}").json()
-    if job["status"] == "done": print(f"\u2705 {job['hf_url']}"); break
-    if job["status"] == "error": raise Exception(job["error"])
-    time.sleep(15)
-```
+Transcription waterfall:
+1. Groq whisper-large-v3 (GROQ_API_KEY) -- fastest, cheapest
+2. OpenAI whisper-1 (OPENAI_API_KEY) -- reliable fallback
+3. HF Inference whisper-large-v3 (HF_TOKEN) -- free, already set in Space
 
 ---
 
 ## THE 5 HARD RULES
 
-1. `class="clip"` on EVERY timed element + `data-start` + `data-duration` + `data-track-index`
-2. `gsap.timeline({ paused: true })` → `window.__timelines["COMP_ID"] = tl`
-3. NEVER `.play()` `.pause()` `.currentTime` — framework controls media
-4. NEVER `Math.random()`, `Date.now()`, `fetch()` in GSAP scripts
-5. `tl.set({}, {}, TOTAL_DURATION)` at the very end
+1. class="clip" on EVERY timed element + data-start + data-duration + data-track-index
+2. gsap.timeline({ paused: true }) -> window.__timelines["COMP_ID"] = tl
+3. NEVER .play() .pause() .currentTime in scripts
+4. NEVER Math.random(), Date.now(), fetch() in GSAP
+5. tl.set({}, {}, TOTAL_DURATION) at the very end
 
-**NO `muted` on video when subject voice is needed.**
-**EXIT ANIMATIONS BANNED** (except final scene).
+NO muted on video when subject voice is needed.
+EXIT ANIMATIONS BANNED except final scene.
 
 ---
 
 ## REFERENCE FILES
 
-- `references/composition.md` — HTML template, GSAP patterns, transitions
-- `references/music.md` — ElevenLabs API, YuE fallback, prompts
-- `references/styles.md` — Dark Premium / Warm Documentary / Bold Editorial
-- `references/transcription.md` — Whisper, cleaning, quote extraction
-- `references/workflows.md` — Scene structures for all 4 video types
+- scripts/watch_gdrive.py  -- Run on every Drive video to watch + transcribe
+- references/composition.md -- HTML template, GSAP patterns, scene timing
+- references/music.md       -- ElevenLabs API code, YuE fallback
+- references/styles.md      -- Dark Premium / Warm Documentary / Bold Editorial
+- references/transcription.md -- Quote extraction algorithm detail
+- references/workflows.md   -- Scene structures for all 4 video types
 
 ## CONNECTIONS
 
-| Tool | When | How |
-|------|------|-----|
-| Google Drive | Scan assets | Composio `GOOGLEDRIVE_FIND_FILE` account=tomoxi |
-| GitHub | Push composition | Composio `GITHUB_COMMIT_MULTIPLE_FILES` AIGoose/dee-video-studio |
-| HF Space | Render | POST aigoose-hyperframes-video-studio.hf.space/api/render |
-| ElevenLabs | Music | POST /v1/music xi-api-key header |
-| Whisper | Transcribe | HF Inference openai/whisper-large-v3 |
+| Tool       | When             | How                                            |
+|------------|------------------|------------------------------------------------|
+| Drive      | Scan + download  | Composio GOOGLEDRIVE_FIND_FILE account=tomoxi  |
+| GitHub     | Push composition | Composio GITHUB_COMMIT_MULTIPLE_FILES AIGoose/ |
+| HF Space   | Render video     | POST aigoose-hyperframes-video-studio.hf.space |
+| ElevenLabs | Music            | POST /v1/music with xi-api-key header          |
+| Groq/OAI   | Transcription    | watch_gdrive.py auto waterfall                 |
+
+## INSTALL watch_gdrive.py
+
+```bash
+curl -o watch_gdrive.py https://raw.githubusercontent.com/AIGoose/dee-video-studio/main/skills/hyperframes-video/scripts/watch_gdrive.py
+pip install gdown --break-system-packages
+python3 watch_gdrive.py --local /path/to/video.MOV
+```
