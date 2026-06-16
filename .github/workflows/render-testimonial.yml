@@ -74,19 +74,26 @@ jobs:
           echo "VIDEO_DURATION=$DUR" >> $GITHUB_ENV
           echo "Duration: ${DUR}s"
 
-      - name: Patch composition with participant data
+      - name: Patch composition into project folder
         run: |
+          # HyperFrames requires a directory with index.html inside
+          mkdir -p project/assets
           python3 scripts/patch_composition.py \
             --input compositions/testimonial.html \
-            --output compositions/testimonial_render.html \
+            --output project/index.html \
             --name "${{ github.event.inputs.participant_name }}" \
             --role "${{ github.event.inputs.participant_role }}" \
             --quote "${{ github.event.inputs.pull_quote }}"
-          sed -i "s/data-duration=\"90\"/data-duration=\"${VIDEO_DURATION}\"/" \
-            compositions/testimonial_render.html
+          # Patch duration
+          sed -i "s/data-duration=\"90\"/data-duration=\"${VIDEO_DURATION}\"/" project/index.html
+          # Copy the video asset into the project folder (relative path ../assets/ from composition)
+          cp assets/testimoni.mp4 project/assets/testimoni.mp4
+          echo "Project folder contents:"
+          ls -lh project/
+          ls -lh project/assets/
 
       - name: Lint composition
-        run: npx hyperframes lint compositions/testimonial_render.html || true
+        run: npx hyperframes lint project || true
 
       - name: Render to MP4
         run: |
@@ -94,8 +101,10 @@ jobs:
           TS=$(date +%Y%m%d-%H%M)
           OUT="output/dee-testimonial-${TS}.mp4"
           echo "OUTPUT_FILE=$OUT" >> $GITHUB_ENV
-          npx hyperframes render compositions/testimonial_render.html \
-            --output "$OUT" --width 1080 --height 1920 --fps 30
+          # Pass the project DIRECTORY (not the html file)
+          npx hyperframes render project \
+            --output "$OUT" \
+            --width 1080 --height 1920 --fps 30
           echo "Rendered: $OUT ($(du -sh $OUT | cut -f1))"
 
       - name: Upload to Hugging Face dataset
