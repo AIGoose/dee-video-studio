@@ -14,7 +14,7 @@ on:
       participant_role:
         description: 'Participant role / org'
         required: false
-        default: 'AI Transformation Series · 2026'
+        default: 'AI Transformation Series 2026'
       pull_quote:
         description: 'Pull quote (strongest line, Indonesian)'
         required: false
@@ -52,7 +52,7 @@ jobs:
       - name: Download testimonial MOV from Google Drive
         run: |
           mkdir -p assets project/assets
-          python3 - <<'EOF'
+          python3 - <<'PYEOF'
           import gdown, os, sys
           fid = "${{ github.event.inputs.gdrive_file_id }}"
           out = "assets/raw.MOV"
@@ -60,7 +60,7 @@ jobs:
           if not os.path.exists(out):
               print("ERROR: download failed"); sys.exit(1)
           print(f"Downloaded {os.path.getsize(out)/1024/1024:.1f} MB")
-          EOF
+          PYEOF
 
       - name: Convert + downscale MOV to 720p MP4
         run: |
@@ -71,13 +71,8 @@ jobs:
             assets/source.mp4
           echo "Source: $(du -sh assets/source.mp4)"
 
-      - name: Trim pauses + interviewer sections (ffmpeg)
+      - name: Trim pauses and interviewer sections
         run: |
-          # Silence map from analysis:
-          # 0-71s: clean continuous speech
-          # 71-77s: 4-pause cluster (cut it)
-          # 77-87s: more speech (keep)
-          # 87-90s: trailing silence (cut)
           ffmpeg -y \
             -i assets/source.mp4 \
             -filter_complex "\
@@ -93,26 +88,22 @@ jobs:
           DUR=$(ffprobe -v quiet -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 assets/trimmed.mp4 | cut -d. -f1)
           echo "VIDEO_DURATION=$DUR" >> $GITHUB_ENV
-          echo "Trimmed duration: ${DUR}s (was 90s)"
+          echo "Trimmed: ${DUR}s (was 90s)"
 
-      - name: Transcribe + generate SRT captions (Whisper via HF)
+      - name: Transcribe and generate SRT captions
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          mkdir -p project/assets
           python3 scripts/gen_captions.py \
             --input assets/trimmed.mp4 \
             --srt-out project/assets/captions.srt
-          echo "SRT preview:"
           head -20 project/assets/captions.srt || true
 
       - name: Download CC0 music track
         run: |
-          # Kevin MacLeod "Acoustic Breeze" — CC BY 3.0 (free for any use with credit)
-          python3 - <<'EOF'
-          import urllib.request, os
-          # Using a GitHub-hosted CC0 acoustic track (no auth needed from GH Actions)
-          url = "https://github.com/anars/blank-audio/raw/master/15-seconds-of-silence.mp3"
-          # Try pixabay (no auth in CI environment)
+          python3 - <<'PYEOF'
+          import urllib.request, os, subprocess
           try:
               urllib.request.urlretrieve(
                   "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Acoustic%20Breeze.mp3",
@@ -124,14 +115,12 @@ jobs:
               else:
                   raise Exception("File too small")
           except Exception as e:
-              print(f"Music download failed: {e} — using silence placeholder")
-              # Silence placeholder so render doesnt fail
-              import subprocess
+              print(f"Music download failed: {e} — generating silence placeholder")
               subprocess.run(["ffmpeg","-y","-f","lavfi","-i","anullsrc=r=44100:cl=stereo",
-                              "-t","90","-q:a","9","-acodec","libmp3lame","project/assets/music.mp3"],
-                             capture_output=True)
+                              "-t","90","-q:a","9","-acodec","libmp3lame",
+                              "project/assets/music.mp3"], capture_output=True)
               print("Silence placeholder created")
-          EOF
+          PYEOF
 
       - name: Build project folder
         run: |
@@ -143,10 +132,9 @@ jobs:
             --role   "${{ github.event.inputs.participant_role }}" \
             --quote  "${{ github.event.inputs.pull_quote }}" \
             --duration "$VIDEO_DURATION"
-          echo "Project contents:"
           ls -lh project/ project/assets/
 
-      - name: Render video (720x1280 @ 24fps · Bright Studio)
+      - name: Render video (720x1280 @ 24fps)
         env:
           HYPERFRAMES_BROWSER_PATH: ${{ env.HYPERFRAMES_BROWSER_PATH }}
         run: |
@@ -163,13 +151,13 @@ jobs:
       - name: Upload to Hugging Face dataset
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PARTICIPANT_NAME: ${{ github.event.inputs.participant_name }}
         run: |
-          python3 - <<'EOF'
+          python3 - <<'PYEOF'
           import os
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
-          out  = os.environ["OUTPUT_FILE"]
-          name = os.environ.get("PARTICIPANT_NAME", "testimoni")
+          out   = os.environ["OUTPUT_FILE"]
           fname = os.path.basename(out)
           api.upload_file(
               path_or_fileobj=out,
@@ -180,9 +168,7 @@ jobs:
           url = f"https://huggingface.co/datasets/AIgoose/video-renders/resolve/main/renders/{fname}"
           print(f"Video ready: {url}")
           print(f"::notice title=Video Ready::{url}")
-          EOF
-        env:
-          PARTICIPANT_NAME: ${{ github.event.inputs.participant_name }}
+          PYEOF
 
       - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4
