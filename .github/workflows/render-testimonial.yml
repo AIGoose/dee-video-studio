@@ -14,11 +14,11 @@ on:
       participant_role:
         description: 'Participant role / org'
         required: false
-        default: 'AI Transformation Series - Batch 2026'
+        default: 'AI Transformation Series · 2026'
       pull_quote:
-        description: 'Pull quote text (Indonesian)'
+        description: 'Pull quote (strongest line, Indonesian)'
         required: false
-        default: 'Setelah training ini, tim kami langsung bisa praktek dan hasilnya nyata.'
+        default: 'Training ini langsung bisa dipraktek dan hasilnya nyata'
 
 jobs:
   render:
@@ -29,89 +29,135 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install system deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg python3-pip
-          pip3 install gdown huggingface_hub --quiet
+          sudo apt-get install -y ffmpeg python3-pip libass-dev
+          pip3 install gdown huggingface_hub requests --quiet
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install HyperFrames CLI
+      - name: Install HyperFrames + chrome-headless-shell
         run: |
           npm install -g hyperframes
           npx hyperframes telemetry disable || true
-
-      - name: Install chrome-headless-shell (perf-optimized browser)
-        run: |
-          # This unlocks beginFrame capture mode (~8x faster than screenshot fallback)
-          OUTPUT=$(npx --yes @puppeteer/browsers install chrome-headless-shell@stable 2>&1)
-          echo "$OUTPUT"
-          SHELL_PATH=$(echo "$OUTPUT" | tail -1 | awk '{print $NF}')
-          if [ ! -x "$SHELL_PATH" ]; then
-            SHELL_PATH=$(find ~/.cache/puppeteer -name "chrome-headless-shell" -type f -executable 2>/dev/null | head -1)
-          fi
-          echo "Browser shell: $SHELL_PATH"
-          echo "HYPERFRAMES_BROWSER_PATH=$SHELL_PATH" >> $GITHUB_ENV
+          SHELL_BIN=$(npx --yes @puppeteer/browsers install chrome-headless-shell@stable 2>&1 | tail -1 | awk '{print $NF}')
+          [ ! -x "$SHELL_BIN" ] && SHELL_BIN=$(find ~/.cache/puppeteer -name "chrome-headless-shell" -executable 2>/dev/null | head -1)
+          echo "HYPERFRAMES_BROWSER_PATH=$SHELL_BIN" >> $GITHUB_ENV
+          echo "Browser: $SHELL_BIN"
 
       - name: Download testimonial MOV from Google Drive
         run: |
-          mkdir -p assets
+          mkdir -p assets project/assets
           python3 - <<'EOF'
           import gdown, os, sys
           fid = "${{ github.event.inputs.gdrive_file_id }}"
-          gdown.download(f"https://drive.google.com/uc?id={fid}", "assets/testimoni_raw.MOV", quiet=False)
-          if not os.path.exists("assets/testimoni_raw.MOV"):
-              sys.exit(1)
-          print(f"Downloaded {os.path.getsize('assets/testimoni_raw.MOV')/1024/1024:.1f} MB")
+          out = "assets/raw.MOV"
+          gdown.download(f"https://drive.google.com/uc?id={fid}", out, quiet=False)
+          if not os.path.exists(out):
+              print("ERROR: download failed"); sys.exit(1)
+          print(f"Downloaded {os.path.getsize(out)/1024/1024:.1f} MB")
           EOF
 
-      - name: Convert MOV to MP4 + downscale to 720p
+      - name: Convert + downscale MOV to 720p MP4
         run: |
-          # Pre-downscale to 720x1280 so HyperFrames doesn't waste cycles on a 4K source
-          ffmpeg -y -i assets/testimoni_raw.MOV \
+          ffmpeg -y -i assets/raw.MOV \
             -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
-            -c:v libx264 -preset fast -crf 23 \
+            -c:v libx264 -preset fast -crf 22 \
             -c:a aac -b:a 128k -movflags +faststart \
-            assets/testimoni.mp4
-          echo "Size: $(du -sh assets/testimoni.mp4)"
+            assets/source.mp4
+          echo "Source: $(du -sh assets/source.mp4)"
 
-      - name: Get video duration
+      - name: Trim pauses + interviewer sections (ffmpeg)
         run: |
+          # Silence map from analysis:
+          # 0-71s: clean continuous speech
+          # 71-77s: 4-pause cluster (cut it)
+          # 77-87s: more speech (keep)
+          # 87-90s: trailing silence (cut)
+          ffmpeg -y \
+            -i assets/source.mp4 \
+            -filter_complex "\
+              [0:v]trim=0:71,setpts=PTS-STARTPTS[v1];\
+              [0:a]atrim=0:71,asetpts=PTS-STARTPTS[a1];\
+              [0:v]trim=77:87,setpts=PTS-STARTPTS[v2];\
+              [0:a]atrim=77:87,asetpts=PTS-STARTPTS[a2];\
+              [v1][a1][v2][a2]concat=n=2:v=1:a=1[vout][aout]" \
+            -map "[vout]" -map "[aout]" \
+            -c:v libx264 -preset fast -crf 22 \
+            -c:a aac -b:a 128k -movflags +faststart \
+            assets/trimmed.mp4
           DUR=$(ffprobe -v quiet -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 assets/testimoni.mp4 | cut -d. -f1)
+            -of default=noprint_wrappers=1:nokey=1 assets/trimmed.mp4 | cut -d. -f1)
           echo "VIDEO_DURATION=$DUR" >> $GITHUB_ENV
-          echo "Duration: ${DUR}s"
+          echo "Trimmed duration: ${DUR}s (was 90s)"
+
+      - name: Transcribe + generate SRT captions (Whisper via HF)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 scripts/gen_captions.py \
+            --input assets/trimmed.mp4 \
+            --srt-out project/assets/captions.srt
+          echo "SRT preview:"
+          head -20 project/assets/captions.srt || true
+
+      - name: Download CC0 music track
+        run: |
+          # Kevin MacLeod "Acoustic Breeze" — CC BY 3.0 (free for any use with credit)
+          python3 - <<'EOF'
+          import urllib.request, os
+          # Using a GitHub-hosted CC0 acoustic track (no auth needed from GH Actions)
+          url = "https://github.com/anars/blank-audio/raw/master/15-seconds-of-silence.mp3"
+          # Try pixabay (no auth in CI environment)
+          try:
+              urllib.request.urlretrieve(
+                  "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Acoustic%20Breeze.mp3",
+                  "project/assets/music.mp3"
+              )
+              size = os.path.getsize("project/assets/music.mp3")
+              if size > 50000:
+                  print(f"Music downloaded: {size/1024:.0f} KB")
+              else:
+                  raise Exception("File too small")
+          except Exception as e:
+              print(f"Music download failed: {e} — using silence placeholder")
+              # Silence placeholder so render doesnt fail
+              import subprocess
+              subprocess.run(["ffmpeg","-y","-f","lavfi","-i","anullsrc=r=44100:cl=stereo",
+                              "-t","90","-q:a","9","-acodec","libmp3lame","project/assets/music.mp3"],
+                             capture_output=True)
+              print("Silence placeholder created")
+          EOF
 
       - name: Build project folder
         run: |
-          mkdir -p project/assets
+          cp assets/trimmed.mp4 project/assets/testimoni.mp4
           python3 scripts/patch_composition.py \
-            --input compositions/testimonial.html \
+            --input  compositions/testimonial.html \
             --output project/index.html \
-            --name "${{ github.event.inputs.participant_name }}" \
-            --role "${{ github.event.inputs.participant_role }}" \
-            --quote "${{ github.event.inputs.pull_quote }}"
-          sed -i "s/data-duration=\"90\"/data-duration=\"${VIDEO_DURATION}\"/" project/index.html
-          cp assets/testimoni.mp4 project/assets/testimoni.mp4
+            --name   "${{ github.event.inputs.participant_name }}" \
+            --role   "${{ github.event.inputs.participant_role }}" \
+            --quote  "${{ github.event.inputs.pull_quote }}" \
+            --duration "$VIDEO_DURATION"
+          echo "Project contents:"
           ls -lh project/ project/assets/
 
-      - name: Render to MP4 (720x1280 @ 24fps)
+      - name: Render video (720x1280 @ 24fps · Bright Studio)
         env:
           HYPERFRAMES_BROWSER_PATH: ${{ env.HYPERFRAMES_BROWSER_PATH }}
         run: |
           mkdir -p output
           TS=$(date +%Y%m%d-%H%M)
-          OUT="output/dee-testimonial-${TS}.mp4"
+          OUT="output/bright-studio-${TS}.mp4"
           echo "OUTPUT_FILE=$OUT" >> $GITHUB_ENV
-          echo "Browser shell path: $HYPERFRAMES_BROWSER_PATH"
           npx hyperframes render project \
             --output "$OUT" \
             --width 720 --height 1280 --fps 24 \
-            --quality draft
+            --quality standard
           echo "Rendered: $OUT ($(du -sh $OUT | cut -f1))"
 
       - name: Upload to Hugging Face dataset
@@ -122,7 +168,8 @@ jobs:
           import os
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
-          out = os.environ["OUTPUT_FILE"]
+          out  = os.environ["OUTPUT_FILE"]
+          name = os.environ.get("PARTICIPANT_NAME", "testimoni")
           fname = os.path.basename(out)
           api.upload_file(
               path_or_fileobj=out,
@@ -134,10 +181,12 @@ jobs:
           print(f"Video ready: {url}")
           print(f"::notice title=Video Ready::{url}")
           EOF
+        env:
+          PARTICIPANT_NAME: ${{ github.event.inputs.participant_name }}
 
       - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4
         with:
-          name: testimonial-mp4
+          name: bright-studio-mp4
           path: output/*.mp4
-          retention-days: 7
+          retention-days: 14

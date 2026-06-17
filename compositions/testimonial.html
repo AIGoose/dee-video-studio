@@ -2,149 +2,219 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#0d0d1f; overflow:hidden; }
-#root { position:relative; width:720px; height:1280px; overflow:hidden; background:#0d0d1f;
-  font-family: 'Inter', 'SF Pro Display', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; }
+body { background:#f5f5f0; overflow:hidden; }
+#root {
+  position:relative; width:720px; height:1280px;
+  overflow:hidden; background:#f5f5f0;
+}
 .clip { position:absolute; }
 .sc { inset:0; }
-.f-disp { font-weight:800; letter-spacing:-0.02em; }
-.f-body { font-weight:500; }
 </style>
 </head>
 <body>
 <div id="root"
-     data-composition-id="dee-testimonial"
+     data-composition-id="bright-studio-testimoni"
      data-start="0"
-     data-duration="90"
+     data-duration="DURATION_PLACEHOLDER"
      data-width="720"
      data-height="1280">
 
-  <!-- A-ROLL: muted video + separate audio -->
-  <video id="aroll-video" class="clip sc" src="../assets/testimoni.mp4"
-    data-start="0" data-duration="90" data-track-index="0"
-    muted playsinline style="object-fit:cover;width:100%;height:100%;"></video>
-  <audio id="aroll-audio" src="../assets/testimoni.mp4"
-    data-start="0" data-duration="90" data-track-index="10" data-volume="1.0"></audio>
+  <!-- ============================================================
+       A-ROLL: trimmed footage fills full frame, NO muted
+       Natural bright background preserved — this IS the style
+  ============================================================= -->
+  <video id="aroll" class="clip sc" src="../assets/trimmed.mp4"
+    data-start="0" data-duration="DURATION_PLACEHOLDER" data-track-index="0"
+    data-volume="1.0" playsinline
+    style="object-fit:cover;width:100%;height:100%;"></video>
 
-  <!-- Persistent bottom vignette -->
-  <div style="position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 45%);z-index:5;"></div>
+  <!-- ============================================================
+       STYLE SIGNATURE: 4px navy left border — always visible
+  ============================================================= -->
+  <div style="position:absolute;top:0;left:0;width:4px;height:100%;
+    background:#1a2744;z-index:20;pointer-events:none;"></div>
 
-  <!-- SCENE 1: NAME CARD 0-4s (each on own track) -->
-  <div id="s1-bg" class="clip sc" data-start="0" data-duration="4" data-track-index="1"
-    style="background:linear-gradient(180deg,rgba(13,13,31,0.72) 0%,transparent 40%);z-index:6;"></div>
-  <div id="s1-rule" class="clip" data-start="0.3" data-duration="3.5" data-track-index="2"
-    style="position:absolute;top:54px;left:38px;width:38px;height:2px;background:#7C6FE0;z-index:7;"></div>
-  <div id="s1-name" class="clip" data-start="0.4" data-duration="3.4" data-track-index="3"
-    style="position:absolute;top:66px;left:38px;right:38px;
-    font-size:48px;line-height:1.1;color:#fff;font-weight:800;letter-spacing:-1px;z-index:7;">
-    AI Transformation<br>Series</div>
-  <div id="s1-tag" class="clip" data-start="0.6" data-duration="3.2" data-track-index="4"
-    style="position:absolute;top:166px;left:38px;font-size:22px;
-    color:rgba(255,255,255,0.65);font-weight:500;z-index:7;">
-    Dee Ferdinand AI &middot; MAIN AI</div>
+  <!-- ============================================================
+       SCENE 1: OPENING HOOK 0–4s
+       Giant Space Grotesk in the TOP THIRD (fills headroom above subject)
+       Navy text on the bright wall — high contrast, no overlay needed
+  ============================================================= -->
+  <div id="s1-program" class="clip" data-start="0.2" data-duration="3.6" data-track-index="1"
+    style="position:absolute;top:40px;left:20px;right:20px;
+    font:900 100px/0.95 'Space Grotesk',sans-serif;
+    color:#1a2744;letter-spacing:-3px;z-index:10;">
+    AI<br>TRANS-<br>FORM</div>
 
-  <!-- SCENE 2: LOWER-THIRD 8-18s -->
-  <div id="s2-card" class="clip" data-start="8" data-duration="10" data-track-index="5"
-    style="position:absolute;bottom:120px;left:0;background:rgba(10,10,25,0.88);
-    border-left:5px solid #7C6FE0;border-radius:0 12px 12px 0;padding:14px 24px 14px 32px;z-index:8;">
-    <div style="font-size:26px;font-weight:700;color:#fff;line-height:1.2;">Peserta Training</div>
-    <div style="font-size:16px;font-weight:400;color:rgba(255,255,255,0.60);margin-top:4px;">
-      AI Transformation Series &middot; Batch 2026</div>
+  <div id="s1-sub" class="clip" data-start="0.5" data-duration="3.3" data-track-index="2"
+    style="position:absolute;top:348px;left:20px;
+    font:700 28px/1.2 'Plus Jakarta Sans',sans-serif;
+    color:#1a2744;letter-spacing:0.04em;z-index:10;">
+    SERIES 2026 &nbsp;·&nbsp; DEE FERDINAND AI</div>
+
+  <div id="s1-rule" class="clip" data-start="0.4" data-duration="3.4" data-track-index="3"
+    style="position:absolute;top:338px;left:20px;width:280px;height:2px;
+    background:#1a2744;z-index:10;"></div>
+
+  <!-- ============================================================
+       SCENE 2: LOWER-THIRD ID 6–16s
+       Glass card slides in from left — identifies subject
+  ============================================================= -->
+  <div id="s2-card" class="clip" data-start="6" data-duration="10" data-track-index="4"
+    style="position:absolute;bottom:200px;left:0;
+    background:rgba(255,255,255,0.92);
+    border-left:5px solid #1a2744;
+    border-radius:0 14px 14px 0;
+    padding:18px 28px 18px 24px;z-index:15;">
+    <div style="font:800 34px/1.1 'Space Grotesk',sans-serif;
+      color:#1a2744;letter-spacing:-0.02em;">PARTICIPANT_NAME</div>
+    <div style="font:500 18px/1.2 'Plus Jakarta Sans',sans-serif;
+      color:#1a2744;opacity:0.65;margin-top:5px;">PARTICIPANT_ROLE</div>
   </div>
 
-  <!-- SCENE 3: PULL QUOTE 30-48s -->
-  <div id="s3-quote-bg" class="clip" data-start="30" data-duration="18" data-track-index="6"
-    style="position:absolute;bottom:150px;left:28px;right:28px;background:rgba(10,10,25,0.92);
-    border-radius:14px;padding:28px 30px;z-index:9;">
-    <div style="font-size:36px;font-weight:600;color:#fff;font-style:italic;line-height:1.3;">
-      &ldquo;Setelah training ini, tim kami langsung bisa praktek dan hasilnya nyata.&rdquo;</div>
-    <div style="margin-top:16px;font-size:18px;font-weight:400;color:#9EF0C8;">
-      &mdash; Peserta &middot; AI Transformation Series</div>
+  <!-- ============================================================
+       SCENE 3: PULL QUOTE 20–38s
+       Big italic quote in navy — Space Grotesk in top area
+       appears when she says the strongest line
+  ============================================================= -->
+  <div id="s3-quote" class="clip" data-start="20" data-duration="18" data-track-index="5"
+    style="position:absolute;top:36px;left:20px;right:20px;z-index:12;
+    background:rgba(245,245,240,0.88);border-radius:14px;
+    padding:24px 22px 20px 28px;
+    border-left:5px solid #1a2744;">
+    <div style="font:800 64px/1.0 'Space Grotesk',sans-serif;
+      color:#1a2744;letter-spacing:-2px;margin-bottom:14px;">
+      &ldquo;PULL_QUOTE_TEXT&rdquo;</div>
+    <div style="font:500 20px/1.3 'Plus Jakarta Sans',sans-serif;
+      color:#1a2744;opacity:0.55;">
+      &mdash; PARTICIPANT_NAME &nbsp;·&nbsp; AI Transformation Series</div>
   </div>
 
-  <!-- SCENE 4: STAT CALLOUT 52-64s -->
-  <div id="s4-stat" class="clip" data-start="52" data-duration="12" data-track-index="7"
-    style="position:absolute;top:54px;right:28px;background:rgba(124,111,224,0.18);
-    border:1.5px solid rgba(124,111,224,0.5);border-radius:12px;padding:20px 26px;
-    text-align:center;z-index:8;">
-    <div style="font-size:60px;font-weight:900;color:#7C6FE0;letter-spacing:-0.02em;line-height:1;">1,000+</div>
-    <div style="font-size:18px;font-weight:500;color:rgba(255,255,255,0.75);margin-top:8px;line-height:1.3;">
-      profesional terlatih<br>sejak 2023</div>
+  <!-- ============================================================
+       SCENE 4: STAT BURST 40–52s
+       1,000+ in giant Space Grotesk — top right corner, navy on bright
+  ============================================================= -->
+  <div id="s4-stat" class="clip" data-start="40" data-duration="12" data-track-index="6"
+    style="position:absolute;top:50px;right:20px;text-align:right;z-index:12;">
+    <div style="font:900 112px/0.9 'Space Grotesk',sans-serif;
+      color:#1a2744;letter-spacing:-4px;">1,000+</div>
+    <div style="font:700 26px/1.2 'Plus Jakarta Sans',sans-serif;
+      color:#1a2744;opacity:0.70;margin-top:8px;">profesional<br>terlatih sejak 2023</div>
   </div>
 
-  <!-- SCENE 5: FEATURE CHIPS 66-78s (each on own track) -->
-  <div id="s5-chip1" class="clip" data-start="66" data-duration="12" data-track-index="8"
-    style="position:absolute;bottom:260px;left:28px;background:#7C6FE0;border-radius:30px;padding:12px 22px;z-index:8;">
-    <span style="font-size:20px;font-weight:700;color:#fff;">80% hands-on</span></div>
-  <div id="s5-chip2" class="clip" data-start="67" data-duration="11" data-track-index="9"
-    style="position:absolute;bottom:210px;left:28px;background:rgba(158,240,200,0.15);
-    border:1.5px solid #9EF0C8;border-radius:30px;padding:12px 22px;z-index:8;">
-    <span style="font-size:20px;font-weight:700;color:#9EF0C8;">Langsung praktek</span></div>
-  <div id="s5-chip3" class="clip" data-start="68" data-duration="10" data-track-index="11"
-    style="position:absolute;bottom:160px;left:28px;background:rgba(224,111,154,0.15);
-    border:1.5px solid #E06F9A;border-radius:30px;padding:12px 22px;z-index:8;">
-    <span style="font-size:20px;font-weight:700;color:#E06F9A;">Real output &#x2713;</span></div>
+  <!-- ============================================================
+       SCENE 5: ENERGY CHIPS 54–66s (each on own track)
+  ============================================================= -->
+  <div id="s5-chip1" class="clip" data-start="54" data-duration="12" data-track-index="7"
+    style="position:absolute;top:50px;left:20px;z-index:12;
+    background:#1a2744;border-radius:40px;padding:12px 24px;">
+    <span style="font:800 28px/1 'Space Grotesk',sans-serif;color:#fff;
+      letter-spacing:-0.02em;">80% hands-on</span></div>
 
-  <!-- SCENE 6: BRAND OUTRO 83-90s (each on own track) -->
-  <div id="s6-overlay" class="clip sc" data-start="83" data-duration="7" data-track-index="12"
-    style="background:linear-gradient(180deg,rgba(13,13,31,0) 0%,rgba(13,13,31,0.96) 60%);z-index:10;"></div>
-  <div id="s6-name" class="clip" data-start="83.5" data-duration="6.5" data-track-index="13"
-    style="position:absolute;bottom:220px;left:0;right:0;text-align:center;
-    font-size:48px;font-weight:800;color:#fff;letter-spacing:-0.02em;z-index:11;">Dee Ferdinand</div>
-  <div id="s6-title" class="clip" data-start="84" data-duration="6" data-track-index="14"
-    style="position:absolute;bottom:178px;left:0;right:0;text-align:center;
-    font-size:22px;font-weight:500;color:#9990ee;z-index:11;">
-    AI Corporate Trainer &middot; MAIN AI</div>
-  <div id="s6-handle" class="clip" data-start="84.5" data-duration="5.5" data-track-index="15"
-    style="position:absolute;bottom:142px;left:0;right:0;text-align:center;
-    font-size:18px;font-weight:400;color:rgba(255,255,255,0.48);z-index:11;">
-    @deeferdinand &middot; deeferdinand.com</div>
-  <div id="s6-cta" class="clip" data-start="85" data-duration="5" data-track-index="16"
-    style="position:absolute;bottom:90px;left:0;right:0;text-align:center;
-    font-size:22px;font-weight:600;font-style:italic;color:#7C6FE0;z-index:11;">
+  <div id="s5-chip2" class="clip" data-start="55.5" data-duration="10.5" data-track-index="8"
+    style="position:absolute;top:112px;left:20px;z-index:12;
+    background:transparent;border:3px solid #1a2744;border-radius:40px;padding:12px 24px;">
+    <span style="font:700 28px/1 'Plus Jakarta Sans',sans-serif;color:#1a2744;">
+      Langsung praktek</span></div>
+
+  <div id="s5-chip3" class="clip" data-start="57" data-duration="9" data-track-index="9"
+    style="position:absolute;top:178px;left:20px;z-index:12;
+    background:transparent;border:3px solid #1a2744;border-radius:40px;padding:12px 24px;">
+    <span style="font:700 28px/1 'Plus Jakarta Sans',sans-serif;color:#1a2744;">
+      Real output &#x2713;</span></div>
+
+  <!-- ============================================================
+       CAPTIONS: word-synced subtitles burned by ffmpeg
+       This track carries the SubRip (SRT) captions file reference
+       HyperFrames renders these as a burned-in ffmpeg subtitle filter
+       Style: white pill background, navy Plus Jakarta Sans text
+  ============================================================= -->
+  <track id="captions" src="../assets/captions.srt"
+    data-start="0" data-duration="DURATION_PLACEHOLDER" data-track-index="25"
+    kind="subtitles" srclang="id" default
+    data-style="FontName=Plus Jakarta Sans,FontSize=28,PrimaryColour=&H001a2744,OutlineColour=&H00FFFFFF,Outline=12,Shadow=0,Alignment=2,MarginV=140,Bold=1"/>
+
+  <!-- ============================================================
+       MUSIC BED: CC0 acoustic at 10% — loops under voice
+  ============================================================= -->
+  <audio src="../assets/music.mp3"
+    data-start="0" data-duration="DURATION_PLACEHOLDER"
+    data-track-index="50" data-volume="0.10"></audio>
+
+  <!-- ============================================================
+       BRAND OUTRO: last 7s — full navy overlay + CTA
+  ============================================================= -->
+  <div id="s6-overlay" class="clip sc" data-start="OUTRO_START" data-duration="7" data-track-index="15"
+    style="background:#1a2744;z-index:18;"></div>
+  <div id="s6-name" class="clip" data-start="OUTRO_NAME" data-duration="6.5" data-track-index="16"
+    style="position:absolute;bottom:300px;left:0;right:0;text-align:center;
+    font:900 72px/1.0 'Space Grotesk',sans-serif;color:#fff;
+    letter-spacing:-2px;z-index:19;">Dee Ferdinand</div>
+  <div id="s6-title" class="clip" data-start="OUTRO_TITLE" data-duration="6" data-track-index="17"
+    style="position:absolute;bottom:240px;left:0;right:0;text-align:center;
+    font:600 26px/1.2 'Plus Jakarta Sans',sans-serif;color:rgba(255,255,255,0.72);z-index:19;">
+    AI Corporate Trainer &nbsp;·&nbsp; MAIN AI</div>
+  <div id="s6-handle" class="clip" data-start="OUTRO_HANDLE" data-duration="5.5" data-track-index="18"
+    style="position:absolute;bottom:196px;left:0;right:0;text-align:center;
+    font:400 20px/1 'Plus Jakarta Sans',sans-serif;color:rgba(255,255,255,0.45);z-index:19;">
+    @deeferdinand &nbsp;·&nbsp; deeferdinand.com</div>
+  <div id="s6-cta" class="clip" data-start="OUTRO_CTA" data-duration="5" data-track-index="19"
+    style="position:absolute;bottom:120px;left:0;right:0;text-align:center;
+    font:700 30px/1 'Plus Jakarta Sans',sans-serif;font-style:italic;
+    color:#a8a0ff;z-index:19;">
     Transform your team &#x2192;</div>
 
-  <!-- Persistent brand bar -->
-  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 38px 28px;
-    background:linear-gradient(transparent,rgba(0,0,0,0.60));z-index:6;">
-    <span style="font-size:17px;font-weight:700;color:#fff;">Dee Ferdinand</span>
-    <span style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.55);margin-left:6px;">
-      &middot; AI Corporate Trainer</span>
+  <!-- Persistent brand bar — always visible -->
+  <div style="position:absolute;bottom:0;left:4px;right:0;
+    padding:14px 24px 30px;
+    background:linear-gradient(transparent,rgba(245,245,240,0.90));z-index:16;">
+    <span style="font:800 20px/1 'Space Grotesk',sans-serif;
+      color:#1a2744;letter-spacing:-0.02em;">Dee Ferdinand</span>
+    <span style="font:400 14px/1 'Plus Jakarta Sans',sans-serif;
+      color:#1a2744;opacity:0.55;margin-left:6px;">&nbsp;·&nbsp; AI Corporate Trainer</span>
   </div>
+
 </div>
 
 <script>
 const tl = gsap.timeline({ paused: true });
-// S1
-tl.from("#s1-rule", { scaleX:0, transformOrigin:"left", duration:0.25, ease:"expo.out" }, 0.3);
-tl.from("#s1-name", { y:-60, autoAlpha:0, duration:0.28, ease:"expo.out" }, 0.4);
-tl.from("#s1-tag",  { y:30, autoAlpha:0, duration:0.35, ease:"power3.out" }, 0.6);
-// S2
-tl.from("#s2-card", { x:-400, autoAlpha:0, duration:0.40, ease:"power3.out" }, 8);
-// S3
-tl.from("#s3-quote-bg", { y:50, autoAlpha:0, scale:0.96, duration:0.55, ease:"back.out(1.8)" }, 30);
-tl.to("#s3-quote-bg",   { autoAlpha:0, duration:0.4, ease:"sine.inOut" }, 47);
-// S4
-tl.from("#s4-stat", { y:-50, autoAlpha:0, scale:0.85, duration:0.45, ease:"back.out(2.2)" }, 52);
-tl.to("#s4-stat",   { autoAlpha:0, duration:0.3 }, 63.5);
-// S5
-tl.from("#s5-chip1", { x:-100, autoAlpha:0, duration:0.30, ease:"power4.out" }, 66);
-tl.from("#s5-chip2", { x:-100, autoAlpha:0, duration:0.30, ease:"power4.out" }, 66.2);
-tl.from("#s5-chip3", { x:-100, autoAlpha:0, duration:0.30, ease:"power4.out" }, 66.4);
-tl.to(["#s5-chip1","#s5-chip2","#s5-chip3"], { autoAlpha:0, duration:0.3 }, 77.5);
-// S6
-tl.from("#s6-overlay", { autoAlpha:0, duration:0.6, ease:"sine.inOut" }, 83);
-tl.from("#s6-name",    { y:30, autoAlpha:0, duration:0.45, ease:"power3.out" }, 83.5);
-tl.from("#s6-title",   { y:25, autoAlpha:0, duration:0.40, ease:"power3.out" }, 84);
-tl.from("#s6-handle",  { y:18, autoAlpha:0, duration:0.35, ease:"power3.out" }, 84.5);
-tl.from("#s6-cta",     { y:18, autoAlpha:0, duration:0.35, ease:"power3.out" }, 85);
-tl.set({}, {}, 90);
+
+// S1: OPENING — slam from above (expo.out kinetic energy)
+tl.from("#s1-rule",    { scaleX:0, transformOrigin:"left", duration:0.2, ease:"expo.out" }, 0.4);
+tl.from("#s1-program", { y:-120, autoAlpha:0, duration:0.25, ease:"expo.out" }, 0.2);
+tl.from("#s1-sub",     { y:30, autoAlpha:0, duration:0.35, ease:"power3.out" }, 0.5);
+
+// S2: LOWER-THIRD — slide from left (power3.out decisive)
+tl.from("#s2-card", { x:-500, autoAlpha:0, duration:0.38, ease:"power3.out" }, 6);
+
+// S3: PULL QUOTE — scale pop from center (back.out confidence)
+tl.from("#s3-quote", { scale:0.88, autoAlpha:0, y:30, duration:0.55, ease:"back.out(1.8)" }, 20);
+tl.to("#s3-quote",   { autoAlpha:0, duration:0.3, ease:"sine.inOut" }, 37.5);
+
+// S4: STAT — slam from top right (expo.out kinetic)
+tl.from("#s4-stat", { y:-80, autoAlpha:0, duration:0.28, ease:"expo.out" }, 40);
+tl.to("#s4-stat",   { autoAlpha:0, duration:0.25 }, 51.5);
+
+// S5: CHIPS — cascade left (power4.out decisive, staggered)
+tl.from("#s5-chip1", { x:-200, autoAlpha:0, duration:0.28, ease:"power4.out" }, 54);
+tl.from("#s5-chip2", { x:-200, autoAlpha:0, duration:0.28, ease:"power4.out" }, 55.5);
+tl.from("#s5-chip3", { x:-200, autoAlpha:0, duration:0.28, ease:"power4.out" }, 57);
+tl.to(["#s5-chip1","#s5-chip2","#s5-chip3"], { autoAlpha:0, duration:0.25 }, 65.5);
+
+// S6: BRAND OUTRO — fade in navy cover
+tl.from("#s6-overlay", { autoAlpha:0, duration:0.5, ease:"sine.inOut" }, "OUTRO_START");
+tl.from("#s6-name",    { y:40, autoAlpha:0, duration:0.45, ease:"power3.out" }, "OUTRO_NAME");
+tl.from("#s6-title",   { y:30, autoAlpha:0, duration:0.40, ease:"power3.out" }, "OUTRO_TITLE");
+tl.from("#s6-handle",  { y:20, autoAlpha:0, duration:0.35, ease:"power3.out" }, "OUTRO_HANDLE");
+tl.from("#s6-cta",     { y:20, autoAlpha:0, duration:0.35, ease:"power3.out" }, "OUTRO_CTA");
+
+tl.set({}, {}, DURATION_PLACEHOLDER);
+
 window.__timelines = window.__timelines || {};
-window.__timelines["dee-testimonial"] = tl;
+window.__timelines["bright-studio-testimoni"] = tl;
 </script>
 </body>
 </html>
