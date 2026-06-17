@@ -23,7 +23,7 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repo
@@ -41,10 +41,21 @@ jobs:
           node-version: '22'
 
       - name: Install HyperFrames CLI
-        run: npm install -g hyperframes
+        run: |
+          npm install -g hyperframes
+          npx hyperframes telemetry disable || true
 
-      - name: Install Chromium
-        run: sudo apt-get install -y chromium-browser || true
+      - name: Install chrome-headless-shell (perf-optimized browser)
+        run: |
+          # This unlocks beginFrame capture mode (~8x faster than screenshot fallback)
+          OUTPUT=$(npx --yes @puppeteer/browsers install chrome-headless-shell@stable 2>&1)
+          echo "$OUTPUT"
+          SHELL_PATH=$(echo "$OUTPUT" | tail -1 | awk '{print $NF}')
+          if [ ! -x "$SHELL_PATH" ]; then
+            SHELL_PATH=$(find ~/.cache/puppeteer -name "chrome-headless-shell" -type f -executable 2>/dev/null | head -1)
+          fi
+          echo "Browser shell: $SHELL_PATH"
+          echo "HYPERFRAMES_BROWSER_PATH=$SHELL_PATH" >> $GITHUB_ENV
 
       - name: Download testimonial MOV from Google Drive
         run: |
@@ -52,18 +63,19 @@ jobs:
           python3 - <<'EOF'
           import gdown, os, sys
           fid = "${{ github.event.inputs.gdrive_file_id }}"
-          out = "assets/testimoni_raw.MOV"
-          gdown.download(f"https://drive.google.com/uc?id={fid}", out, quiet=False)
-          if not os.path.exists(out):
+          gdown.download(f"https://drive.google.com/uc?id={fid}", "assets/testimoni_raw.MOV", quiet=False)
+          if not os.path.exists("assets/testimoni_raw.MOV"):
               sys.exit(1)
-          print(f"Downloaded {os.path.getsize(out)/1024/1024:.1f} MB")
+          print(f"Downloaded {os.path.getsize('assets/testimoni_raw.MOV')/1024/1024:.1f} MB")
           EOF
 
-      - name: Convert MOV to MP4
+      - name: Convert MOV to MP4 + downscale to 720p
         run: |
+          # Pre-downscale to 720x1280 so HyperFrames doesn't waste cycles on a 4K source
           ffmpeg -y -i assets/testimoni_raw.MOV \
-            -c:v libx264 -preset fast -crf 22 \
-            -c:a aac -b:a 192k -movflags +faststart \
+            -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
+            -c:v libx264 -preset fast -crf 23 \
+            -c:a aac -b:a 128k -movflags +faststart \
             assets/testimoni.mp4
           echo "Size: $(du -sh assets/testimoni.mp4)"
 
@@ -74,9 +86,8 @@ jobs:
           echo "VIDEO_DURATION=$DUR" >> $GITHUB_ENV
           echo "Duration: ${DUR}s"
 
-      - name: Patch composition into project folder
+      - name: Build project folder
         run: |
-          # HyperFrames requires a directory with index.html inside
           mkdir -p project/assets
           python3 scripts/patch_composition.py \
             --input compositions/testimonial.html \
@@ -84,27 +95,23 @@ jobs:
             --name "${{ github.event.inputs.participant_name }}" \
             --role "${{ github.event.inputs.participant_role }}" \
             --quote "${{ github.event.inputs.pull_quote }}"
-          # Patch duration
           sed -i "s/data-duration=\"90\"/data-duration=\"${VIDEO_DURATION}\"/" project/index.html
-          # Copy the video asset into the project folder (relative path ../assets/ from composition)
           cp assets/testimoni.mp4 project/assets/testimoni.mp4
-          echo "Project folder contents:"
-          ls -lh project/
-          ls -lh project/assets/
+          ls -lh project/ project/assets/
 
-      - name: Lint composition
-        run: npx hyperframes lint project || true
-
-      - name: Render to MP4
+      - name: Render to MP4 (720x1280 @ 24fps)
+        env:
+          HYPERFRAMES_BROWSER_PATH: ${{ env.HYPERFRAMES_BROWSER_PATH }}
         run: |
           mkdir -p output
           TS=$(date +%Y%m%d-%H%M)
           OUT="output/dee-testimonial-${TS}.mp4"
           echo "OUTPUT_FILE=$OUT" >> $GITHUB_ENV
-          # Pass the project DIRECTORY (not the html file)
+          echo "Browser shell path: $HYPERFRAMES_BROWSER_PATH"
           npx hyperframes render project \
             --output "$OUT" \
-            --width 1080 --height 1920 --fps 30
+            --width 720 --height 1280 --fps 24 \
+            --quality draft
           echo "Rendered: $OUT ($(du -sh $OUT | cut -f1))"
 
       - name: Upload to Hugging Face dataset
