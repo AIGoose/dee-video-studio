@@ -8,7 +8,7 @@ on:
         required: true
         default: '1f1qlgyLJSCQgpjrWflaqldsNE2fZ-_1X'
       participant_name:
-        description: 'Participant name (lower-third)'
+        description: 'Participant name'
         required: false
         default: 'Peserta Training'
       participant_role:
@@ -16,7 +16,7 @@ on:
         required: false
         default: 'AI Transformation Series 2026'
       pull_quote:
-        description: 'Pull quote (strongest line, Indonesian)'
+        description: 'Pull quote (Indonesian)'
         required: false
         default: 'Training ini langsung bisa dipraktek dan hasilnya nyata'
 
@@ -32,8 +32,9 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg python3-pip libass-dev
+          sudo apt-get install -y ffmpeg python3-pip libass-dev fonts-liberation
           pip3 install gdown huggingface_hub requests --quiet
+          fc-cache -fv 2>/dev/null || true
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -47,7 +48,7 @@ jobs:
           SHELL_BIN=$(npx --yes @puppeteer/browsers install chrome-headless-shell@stable 2>&1 | tail -1 | awk '{print $NF}')
           [ ! -x "$SHELL_BIN" ] && SHELL_BIN=$(find ~/.cache/puppeteer -name "chrome-headless-shell" -executable 2>/dev/null | head -1)
           echo "HYPERFRAMES_BROWSER_PATH=$SHELL_BIN" >> $GITHUB_ENV
-          echo "Browser: $SHELL_BIN"
+          echo "Browser shell: $SHELL_BIN"
 
       - name: Download testimonial MOV from Google Drive
         run: |
@@ -62,7 +63,7 @@ jobs:
           print(f"Downloaded {os.path.getsize(out)/1024/1024:.1f} MB")
           PYEOF
 
-      - name: Convert + downscale MOV to 720p MP4
+      - name: Convert MOV to 720p source MP4
         run: |
           ffmpeg -y -i assets/raw.MOV \
             -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
@@ -71,10 +72,9 @@ jobs:
             assets/source.mp4
           echo "Source: $(du -sh assets/source.mp4)"
 
-      - name: Trim pauses and interviewer sections
+      - name: Cut interviewer section (71-77s cluster)
         run: |
-          ffmpeg -y \
-            -i assets/source.mp4 \
+          ffmpeg -y -i assets/source.mp4 \
             -filter_complex "\
               [0:v]trim=0:71,setpts=PTS-STARTPTS[v1];\
               [0:a]atrim=0:71,asetpts=PTS-STARTPTS[a1];\
@@ -84,57 +84,102 @@ jobs:
             -map "[vout]" -map "[aout]" \
             -c:v libx264 -preset fast -crf 22 \
             -c:a aac -b:a 128k -movflags +faststart \
-            assets/trimmed.mp4
-          DUR=$(ffprobe -v quiet -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 assets/trimmed.mp4 | cut -d. -f1)
-          echo "VIDEO_DURATION=$DUR" >> $GITHUB_ENV
-          echo "Trimmed: ${DUR}s (was 90s)"
+            assets/cut.mp4
+          echo "After cut: $(ffprobe -v quiet -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 assets/cut.mp4 | cut -d. -f1)s"
 
-      - name: Transcribe and generate SRT captions
+      - name: Denoise voice + jump-cut pauses
+        run: |
+          ffmpeg -y -i assets/cut.mp4 \
+            -filter_complex "\
+              [0:a]anlmdn=s=7:p=0.002:r=0.002:m=15[dn];\
+              [dn]silenceremove=start_periods=1:start_silence=0.3:start_threshold=-35dB\
+                :stop_periods=-1:stop_silence=0.05:stop_threshold=-35dB[clean]" \
+            -map "[0:v]" -map "[clean]" \
+            -c:v copy -c:a aac -b:a 128k \
+            assets/denoised.mp4
+          DUR=$(ffprobe -v quiet -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 assets/denoised.mp4 | xargs printf "%.1f")
+          echo "FOOTAGE_DUR=$DUR" >> $GITHUB_ENV
+          echo "After denoise+jumpcut: ${DUR}s"
+
+      - name: Transcribe + generate SRT captions
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           mkdir -p project/assets
           python3 scripts/gen_captions.py \
-            --input assets/trimmed.mp4 \
-            --srt-out project/assets/captions.srt
-          head -20 project/assets/captions.srt || true
+            --input assets/denoised.mp4 \
+            --srt-out assets/captions.srt
+          echo "SRT preview:"; head -20 assets/captions.srt || true
 
-      - name: Download CC0 music track
+      - name: Burn captions into video (ffmpeg, before HyperFrames)
         run: |
-          python3 - <<'PYEOF'
-          import urllib.request, os, subprocess
-          try:
-              urllib.request.urlretrieve(
-                  "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Acoustic%20Breeze.mp3",
-                  "project/assets/music.mp3"
-              )
-              size = os.path.getsize("project/assets/music.mp3")
-              if size > 50000:
-                  print(f"Music downloaded: {size/1024:.0f} KB")
-              else:
-                  raise Exception("File too small")
-          except Exception as e:
-              print(f"Music download failed: {e} — generating silence placeholder")
-              subprocess.run(["ffmpeg","-y","-f","lavfi","-i","anullsrc=r=44100:cl=stereo",
-                              "-t","90","-q:a","9","-acodec","libmp3lame",
-                              "project/assets/music.mp3"], capture_output=True)
-              print("Silence placeholder created")
-          PYEOF
+          # Install a system font for subtitle rendering
+          FONT_PATH=$(fc-list | grep -i liberation | grep -i regular | head -1 | cut -d: -f1 || echo "")
+          [ -z "$FONT_PATH" ] && FONT_PATH="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+          echo "Using font: $FONT_PATH"
+
+          ffmpeg -y -i assets/denoised.mp4 \
+            -vf "subtitles=assets/captions.srt:force_style='FontName=Liberation Sans,FontSize=22,PrimaryColour=&H001a2744,OutlineColour=&H00FFFFFF,Outline=10,Shadow=0,Alignment=2,MarginV=120,Bold=1'" \
+            -c:v libx264 -preset fast -crf 22 \
+            -c:a copy \
+            assets/captioned.mp4
+          echo "Captioned video: $(du -sh assets/captioned.mp4)"
+
+      - name: Mix CC0 background music
+        run: |
+          # Use music.mp3 from repo assets/ if present, else generate tone
+          if [ -f "assets/music.mp3" ]; then
+            echo "Using repo music.mp3"
+            MUSIC="assets/music.mp3"
+          else
+            echo "Generating lo-fi tone placeholder"
+            ffmpeg -y -f lavfi -i \
+              "aevalsrc=0.08*sin(2*PI*220*t)+0.05*sin(2*PI*440*t)+0.03*sin(2*PI*880*t):s=44100" \
+              -af "volume=0.12,lowpass=f=800,highpass=f=80" \
+              -t 120 -q:a 6 assets/music_gen.mp3 2>/dev/null
+            MUSIC="assets/music_gen.mp3"
+          fi
+
+          DUR=$(ffprobe -v quiet -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 assets/captioned.mp4 | xargs printf "%.1f")
+
+          ffmpeg -y \
+            -i assets/captioned.mp4 \
+            -stream_loop -1 -i "$MUSIC" \
+            -filter_complex "\
+              [1:a]atrim=0:${DUR},asetpts=PTS-STARTPTS,volume=0.10[music];\
+              [0:a][music]amix=inputs=2:duration=first:dropout_transition=2[aout]" \
+            -map "0:v" -map "[aout]" \
+            -c:v copy -c:a aac -b:a 128k \
+            assets/clean.mp4
+          FOOTAGE_DUR=$(ffprobe -v quiet -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 assets/clean.mp4 | xargs printf "%.0f")
+          TOTAL_DUR=$((FOOTAGE_DUR + 2))
+          echo "FOOTAGE_DUR=$FOOTAGE_DUR" >> $GITHUB_ENV
+          echo "TOTAL_DUR=$TOTAL_DUR" >> $GITHUB_ENV
+          echo "Final clean.mp4: ${FOOTAGE_DUR}s | total with title card: ${TOTAL_DUR}s"
 
       - name: Build project folder
         run: |
-          cp assets/trimmed.mp4 project/assets/testimoni.mp4
+          cp assets/clean.mp4 project/assets/clean.mp4
+          [ -f "assets/music.mp3" ] && cp assets/music.mp3 project/assets/music.mp3 || \
+            cp assets/music_gen.mp3 project/assets/music.mp3
           python3 scripts/patch_composition.py \
-            --input  compositions/testimonial.html \
-            --output project/index.html \
-            --name   "${{ github.event.inputs.participant_name }}" \
-            --role   "${{ github.event.inputs.participant_role }}" \
-            --quote  "${{ github.event.inputs.pull_quote }}" \
-            --duration "$VIDEO_DURATION"
-          ls -lh project/ project/assets/
+            --input       compositions/testimonial.html \
+            --output      project/index.html \
+            --name        "${{ github.event.inputs.participant_name }}" \
+            --role        "${{ github.event.inputs.participant_role }}" \
+            --quote       "${{ github.event.inputs.pull_quote }}" \
+            --footage-dur "$FOOTAGE_DUR" \
+            --total-dur   "$TOTAL_DUR"
+          echo "Project contents:"; ls -lh project/ project/assets/
 
-      - name: Render video (720x1280 @ 24fps)
+      - name: Lint composition
+        run: npx hyperframes lint project || true
+
+      - name: Render (720x1280 @ 24fps - Bright Studio v3)
         env:
           HYPERFRAMES_BROWSER_PATH: ${{ env.HYPERFRAMES_BROWSER_PATH }}
         run: |
@@ -143,12 +188,10 @@ jobs:
           OUT="output/bright-studio-${TS}.mp4"
           echo "OUTPUT_FILE=$OUT" >> $GITHUB_ENV
           npx hyperframes render project \
-            --output "$OUT" \
-            --width 720 --height 1280 --fps 24 \
-            --quality standard
+            --output "$OUT" --width 720 --height 1280 --fps 24 --quality standard
           echo "Rendered: $OUT ($(du -sh $OUT | cut -f1))"
 
-      - name: Upload to Hugging Face dataset
+      - name: Upload to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PARTICIPANT_NAME: ${{ github.event.inputs.participant_name }}
@@ -156,15 +199,12 @@ jobs:
           python3 - <<'PYEOF'
           import os
           from huggingface_hub import HfApi
-          api = HfApi(token=os.environ["HF_TOKEN"])
+          api   = HfApi(token=os.environ["HF_TOKEN"])
           out   = os.environ["OUTPUT_FILE"]
           fname = os.path.basename(out)
-          api.upload_file(
-              path_or_fileobj=out,
+          api.upload_file(path_or_fileobj=out,
               path_in_repo=f"renders/{fname}",
-              repo_id="AIgoose/video-renders",
-              repo_type="dataset",
-          )
+              repo_id="AIgoose/video-renders", repo_type="dataset")
           url = f"https://huggingface.co/datasets/AIgoose/video-renders/resolve/main/renders/{fname}"
           print(f"Video ready: {url}")
           print(f"::notice title=Video Ready::{url}")
@@ -173,6 +213,6 @@ jobs:
       - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4
         with:
-          name: bright-studio-mp4
+          name: bright-studio-v3
           path: output/*.mp4
           retention-days: 14
