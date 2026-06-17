@@ -48,9 +48,9 @@ jobs:
           SHELL_BIN=$(npx --yes @puppeteer/browsers install chrome-headless-shell@stable 2>&1 | tail -1 | awk '{print $NF}')
           [ ! -x "$SHELL_BIN" ] && SHELL_BIN=$(find ~/.cache/puppeteer -name "chrome-headless-shell" -executable 2>/dev/null | head -1)
           echo "HYPERFRAMES_BROWSER_PATH=$SHELL_BIN" >> $GITHUB_ENV
-          echo "Browser shell: $SHELL_BIN"
+          echo "Browser: $SHELL_BIN"
 
-      - name: Download testimonial MOV from Google Drive
+      - name: Download MOV from Google Drive
         run: |
           mkdir -p assets project/assets
           python3 - <<'PYEOF'
@@ -59,11 +59,11 @@ jobs:
           out = "assets/raw.MOV"
           gdown.download(f"https://drive.google.com/uc?id={fid}", out, quiet=False)
           if not os.path.exists(out):
-              print("ERROR: download failed"); sys.exit(1)
+              sys.exit(1)
           print(f"Downloaded {os.path.getsize(out)/1024/1024:.1f} MB")
           PYEOF
 
-      - name: Convert MOV to 720p source MP4
+      - name: Convert MOV to 720p MP4
         run: |
           ffmpeg -y -i assets/raw.MOV \
             -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
@@ -72,7 +72,7 @@ jobs:
             assets/source.mp4
           echo "Source: $(du -sh assets/source.mp4)"
 
-      - name: Cut interviewer section (71-77s cluster)
+      - name: Trim interviewer section
         run: |
           ffmpeg -y -i assets/source.mp4 \
             -filter_complex "\
@@ -85,87 +85,84 @@ jobs:
             -c:v libx264 -preset fast -crf 22 \
             -c:a aac -b:a 128k -movflags +faststart \
             assets/cut.mp4
-          echo "After cut: $(ffprobe -v quiet -show_entries format=duration \
+          echo "Cut: $(ffprobe -v quiet -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 assets/cut.mp4 | cut -d. -f1)s"
 
-      - name: Denoise voice + jump-cut pauses
+      - name: Denoise audio (extract, filter, remux)
         run: |
+          # Step A: extract audio only and apply anlmdn noise reduction
           ffmpeg -y -i assets/cut.mp4 \
-            -filter_complex "\
-              [0:a]anlmdn=s=7:p=0.002:r=0.002:m=15[dn];\
-              [dn]silenceremove=start_periods=1:start_silence=0.3:start_threshold=-35dB\
-                :stop_periods=-1:stop_silence=0.05:stop_threshold=-35dB[clean]" \
-            -map "[0:v]" -map "[clean]" \
-            -c:v copy -c:a aac -b:a 128k \
-            assets/jumpcut.mp4
-          DUR=$(ffprobe -v quiet -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 assets/jumpcut.mp4 | xargs printf "%.1f")
-          echo "FOOTAGE_DUR=$DUR" >> $GITHUB_ENV
-          echo "After denoise+jumpcut: ${DUR}s"
+            -vn -af "anlmdn=s=7:p=0.002:r=0.002:m=15" \
+            -c:a aac -b:a 128k \
+            assets/audio_clean.aac
 
-      - name: Transcribe + generate SRT captions
+          # Step B: remux original video with clean audio
+          ffmpeg -y \
+            -i assets/cut.mp4 \
+            -i assets/audio_clean.aac \
+            -map 0:v -map 1:a \
+            -c:v copy -c:a copy \
+            -shortest \
+            assets/denoised.mp4
+
+          echo "Denoised: $(du -sh assets/denoised.mp4)"
+
+      - name: Set footage duration
+        run: |
+          DUR=$(ffprobe -v quiet -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 assets/denoised.mp4 | xargs printf "%.0f")
+          echo "FOOTAGE_DUR=$DUR" >> $GITHUB_ENV
+          echo "Footage duration: ${DUR}s"
+
+      - name: Transcribe and generate SRT captions
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           mkdir -p project/assets
           python3 scripts/gen_captions.py \
-            --input assets/jumpcut.mp4 \
+            --input assets/denoised.mp4 \
             --srt-out assets/captions.srt
-          echo "SRT preview:"; head -20 assets/captions.srt || true
+          head -20 assets/captions.srt || true
 
-      - name: Burn captions into video (ffmpeg, before HyperFrames)
+      - name: Burn captions into video
         run: |
-          # Install a system font for subtitle rendering
-          FONT_PATH=$(fc-list | grep -i liberation | grep -i regular | head -1 | cut -d: -f1 || echo "")
+          FONT_PATH=$(fc-list | grep -i "LiberationSans-Regular" | head -1 | cut -d: -f1)
           [ -z "$FONT_PATH" ] && FONT_PATH="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
-          echo "Using font: $FONT_PATH"
-
-          ffmpeg -y -i assets/jumpcut.mp4 \
+          echo "Font: $FONT_PATH"
+          ffmpeg -y -i assets/denoised.mp4 \
             -vf "subtitles=assets/captions.srt:force_style='FontName=Liberation Sans,FontSize=22,PrimaryColour=&H001a2744,OutlineColour=&H00FFFFFF,Outline=10,Shadow=0,Alignment=2,MarginV=120,Bold=1'" \
             -c:v libx264 -preset fast -crf 22 \
             -c:a copy \
             assets/captioned.mp4
-          echo "Captioned video: $(du -sh assets/captioned.mp4)"
+          echo "Captioned: $(du -sh assets/captioned.mp4)"
 
-      - name: Mix CC0 background music
+      - name: Mix background music
         run: |
-          # Use music.mp3 from repo assets/ if present, else generate tone
-          if [ -f "assets/music.mp3" ]; then
-            echo "Using repo music.mp3"
-            MUSIC="assets/music.mp3"
-          else
-            echo "Generating lo-fi tone placeholder"
-            ffmpeg -y -f lavfi -i \
-              "aevalsrc=0.08*sin(2*PI*220*t)+0.05*sin(2*PI*440*t)+0.03*sin(2*PI*880*t):s=44100" \
-              -af "volume=0.12,lowpass=f=800,highpass=f=80" \
-              -t 120 -q:a 6 assets/music_gen.mp3 2>/dev/null
-            MUSIC="assets/music_gen.mp3"
-          fi
-
-          DUR=$(ffprobe -v quiet -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 assets/captioned.mp4 | xargs printf "%.1f")
+          DUR=$FOOTAGE_DUR
+          # Generate lo-fi ambient tone (CC0 — no external download needed)
+          ffmpeg -y -f lavfi \
+            -i "aevalsrc=0.06*sin(2*PI*220*t)+0.04*sin(2*PI*330*t)+0.03*sin(2*PI*110*t):s=44100" \
+            -af "volume=0.10,lowpass=f=600,highpass=f=60,aecho=0.6:0.3:60:0.3" \
+            -t "${DUR}" -q:a 6 -acodec libmp3lame \
+            assets/music_gen.mp3
 
           ffmpeg -y \
             -i assets/captioned.mp4 \
-            -stream_loop -1 -i "$MUSIC" \
-            -filter_complex "\
-              [1:a]atrim=0:${DUR},asetpts=PTS-STARTPTS,volume=0.10[music];\
-              [0:a][music]amix=inputs=2:duration=first:dropout_transition=2[aout]" \
+            -stream_loop -1 -i assets/music_gen.mp3 \
+            -filter_complex \
+              "[1:a]atrim=0:${DUR},asetpts=PTS-STARTPTS,volume=0.10[music];\
+               [0:a][music]amix=inputs=2:duration=first:dropout_transition=2[aout]" \
             -map "0:v" -map "[aout]" \
             -c:v copy -c:a aac -b:a 128k \
             assets/clean.mp4
-          FOOTAGE_DUR=$(ffprobe -v quiet -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 assets/clean.mp4 | xargs printf "%.0f")
-          TOTAL_DUR=$((FOOTAGE_DUR + 2))
-          echo "FOOTAGE_DUR=$FOOTAGE_DUR" >> $GITHUB_ENV
-          echo "TOTAL_DUR=$TOTAL_DUR" >> $GITHUB_ENV
-          echo "Final clean.mp4: ${FOOTAGE_DUR}s | total with title card: ${TOTAL_DUR}s"
+
+          TOTAL=$((DUR + 3))
+          echo "TOTAL_DUR=$TOTAL" >> $GITHUB_ENV
+          echo "clean.mp4: $(du -sh assets/clean.mp4) | footage=${DUR}s total=${TOTAL}s"
 
       - name: Build project folder
         run: |
           cp assets/clean.mp4 project/assets/clean.mp4
-          [ -f "assets/music.mp3" ] && cp assets/music.mp3 project/assets/music.mp3 || \
-            cp assets/music_gen.mp3 project/assets/music.mp3
           python3 scripts/patch_composition.py \
             --input       compositions/testimonial.html \
             --output      project/index.html \
@@ -174,12 +171,12 @@ jobs:
             --quote       "${{ github.event.inputs.pull_quote }}" \
             --footage-dur "$FOOTAGE_DUR" \
             --total-dur   "$TOTAL_DUR"
-          echo "Project contents:"; ls -lh project/ project/assets/
+          echo "Project:"; ls -lh project/ project/assets/
 
       - name: Lint composition
         run: npx hyperframes lint project || true
 
-      - name: Render (720x1280 @ 24fps - Bright Studio v3)
+      - name: Render (720x1280 @ 24fps)
         env:
           HYPERFRAMES_BROWSER_PATH: ${{ env.HYPERFRAMES_BROWSER_PATH }}
         run: |
